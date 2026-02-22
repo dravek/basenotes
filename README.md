@@ -80,12 +80,13 @@ See [INSTALL.md](INSTALL.md) for full instructions including production Caddy co
 
 ```
 public/index.php        # Single entry point — all requests routed here
+public/assets/          # style.css + app.js (served directly by Caddy)
 src/
   Auth/                 # Session, password hashing, API token logic
   Http/                 # Router, Request, Middleware (auth, CSRF, rate limiting)
   Repos/                # PDO repositories for users, notes, tokens
   Util/                 # Env loader, ULID generator, CSRF, validation
 views/                  # PHP templates — rendering only, no business logic
-assets/                 # style.css + app.js (EasyMDE init)
+assets/                 # style.css + app.js (served directly by Caddy from public/assets/)
 migrations/             # SQL schema files, run via bin/migrate.php
 ```
