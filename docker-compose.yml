@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - .:/var/www/html
+      - notes_data:/var/www/html/data
+    environment:
+      - APP_ENV=${APP_ENV}
+      - APP_PEPPER=${APP_PEPPER}
+      - DB_PATH=${DB_PATH}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./public:/var/www/html/public
+    depends_on:
+      - app
+
+volumes:
+  notes_data:
+  caddy_data:
+  caddy_config:
