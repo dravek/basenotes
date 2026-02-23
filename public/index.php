@@ -634,6 +634,25 @@ $router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRep
     ]);
 });
 
+$router->get('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+    $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:read', $pepper);
+    $userId = $token->userId;
+
+    $note = $noteRepo->findById($args['id'], $userId);
+    if ($note === null) {
+        Middleware::apiError(404, 'NOT_FOUND', 'Note not found.');
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode([
+        'id'         => $note->id,
+        'title'      => $note->title,
+        'content_md' => $note->contentMd,
+        'created_at' => $note->createdAt,
+        'updated_at' => $note->updatedAt,
+    ]);
+});
+
 $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;

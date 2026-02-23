@@ -60,6 +60,7 @@ All API routes require an `Authorization: Bearer <token>` header. Generate token
 | Method | Path | Scope | Description |
 |--------|------|-------|-------------|
 | `GET` | `/api/v1/notes` | `notes:read` | List notes (cursor-paginated) |
+| `GET` | `/api/v1/notes/{id}` | `notes:read` | Retrieve a note by ID |
 | `POST` | `/api/v1/notes` | `notes:write` | Create a note |
 | `PATCH` | `/api/v1/notes/{id}` | `notes:write` | Update a note |
 | `DELETE` | `/api/v1/notes/{id}` | `notes:write` | Delete a note |
@@ -76,6 +77,23 @@ curl -H "Authorization: Bearer nt_YOUR_TOKEN" http://localhost/api/v1/notes
   "data": [{ "id": "...", "title": "My Note", "updated_at": 1234567890 }],
   "next_cursor": "base64string or null",
   "per_page": 20
+}
+```
+
+**Example (single note):**
+
+```bash
+curl -H "Authorization: Bearer nt_YOUR_TOKEN" http://localhost/api/v1/notes/<note_id>
+```
+
+**Response:**
+```json
+{
+  "id": "...",
+  "title": "My Note",
+  "content_md": "# Hello",
+  "created_at": 1234567890,
+  "updated_at": 1234567890
 }
 ```
 
