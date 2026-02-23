@@ -4,6 +4,7 @@
 use App\Auth\Session;
 use App\Util\Csrf;
 $userId = Session::userId();
+$isAdmin = (bool)Session::get('is_admin', false);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -22,6 +23,9 @@ $userId = Session::userId();
             <a href="/app/settings/tokens">Tokens</a>
             <a href="/app/settings/password">Password</a>
             <a href="/app/settings/recovery">Recovery</a>
+            <?php if ($isAdmin): ?>
+            <a href="/app/admin/users">Admin</a>
+            <?php endif; ?>
             <form method="POST" action="/logout" class="logout-form">
                 <input type="hidden" name="_csrf" value="<?= e(Csrf::token()) ?>">
                 <button type="submit">Logout</button>

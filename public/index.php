@@ -65,6 +65,17 @@ $recoveryRepo = new RecoveryCodeRepository($pdo);
 $recoveryAuditRepo = new RecoveryAuditRepository($pdo);
 $pepper    = Env::get('APP_PEPPER');
 
+$sessionUserId = Session::userId();
+if ($sessionUserId !== null) {
+    $sessionUser = $userRepo->findById($sessionUserId);
+    if ($sessionUser === null || $sessionUser->disabledAt !== null) {
+        Session::destroy();
+        header('Location: /login');
+        exit;
+    }
+    Session::set('is_admin', $sessionUser->isAdmin);
+}
+
 $request = new Request();
 $router  = new Router();
 
@@ -102,6 +113,12 @@ $router->post('/login', function (Request $req) use ($userRepo): void {
     if ($user === null || !\App\Auth\Password::verify($password, $user->passwordHash)) {
         Middleware::recordFailedLogin($identity);
         $errors = ['Invalid email or password.'];
+        require __DIR__ . '/../views/login.php';
+        return;
+    }
+
+    if ($user->disabledAt !== null) {
+        $errors = ['Your account has been disabled. Contact an administrator.'];
         require __DIR__ . '/../views/login.php';
         return;
     }
@@ -148,6 +165,8 @@ $router->post('/register', function (Request $req) use ($userRepo, $recoveryRepo
         id:           \App\Util\Id::ulid(),
         email:        $email,
         passwordHash: \App\Auth\Password::hash($password),
+        isAdmin:      false,
+        disabledAt:   null,
         createdAt:    $now,
         updatedAt:    $now,
     );
@@ -213,6 +232,14 @@ $router->post('/recovery', function (Request $req) use ($userRepo, $recoveryRepo
     $hash = \App\Auth\RecoveryCode::hash($normalized, $pepper);
     $code = $recoveryRepo->findValidByHash($hash);
     if ($code === null) {
+        Middleware::recordFailedRecovery($identity);
+        $errors = ['Recovery code is invalid or already used.'];
+        require __DIR__ . '/../views/recovery.php';
+        return;
+    }
+
+    $codeUser = $userRepo->findById($code->userId);
+    if ($codeUser === null || $codeUser->disabledAt !== null) {
         Middleware::recordFailedRecovery($identity);
         $errors = ['Recovery code is invalid or already used.'];
         require __DIR__ . '/../views/recovery.php';
@@ -358,6 +385,49 @@ $router->get('/app/notes/{id}/export', function (Request $req, array $args) use 
     exit;
 });
 
+// ── Admin routes ─────────────────────────────────────────────────────────
+
+$router->get('/app/admin/users', function (Request $req) use ($userRepo): void {
+    Middleware::requireAdmin($req, $userRepo);
+    $users = $userRepo->listAll();
+    require __DIR__ . '/../views/admin/users.php';
+});
+
+$router->post('/app/admin/users/{id}/disable', function (Request $req, array $args) use ($userRepo): void {
+    Middleware::requireAdmin($req, $userRepo);
+    Middleware::verifyCsrf($req);
+    $targetId = $args['id'];
+    $targetUser = $userRepo->findById($targetId);
+    if ($targetUser === null) {
+        http_response_code(404);
+        echo '<!DOCTYPE html><html><body><h1>404 Not Found</h1><p>User not found.</p></body></html>';
+        exit;
+    }
+    if ($targetId === \App\Auth\Session::userId()) {
+        http_response_code(400);
+        echo '<!DOCTYPE html><html><body><h1>400 Bad Request</h1><p>You cannot disable your own account.</p></body></html>';
+        exit;
+    }
+    $userRepo->setDisabledAt($targetId, time());
+    header('Location: /app/admin/users');
+    exit;
+});
+
+$router->post('/app/admin/users/{id}/enable', function (Request $req, array $args) use ($userRepo): void {
+    Middleware::requireAdmin($req, $userRepo);
+    Middleware::verifyCsrf($req);
+    $targetId = $args['id'];
+    $targetUser = $userRepo->findById($targetId);
+    if ($targetUser === null) {
+        http_response_code(404);
+        echo '<!DOCTYPE html><html><body><h1>404 Not Found</h1><p>User not found.</p></body></html>';
+        exit;
+    }
+    $userRepo->setDisabledAt($targetId, null);
+    header('Location: /app/admin/users');
+    exit;
+});
+
 // ── Settings routes ───────────────────────────────────────────────────────
 
 $router->get('/app/settings/password', function (Request $req): void {
@@ -490,8 +560,8 @@ $router->post('/app/settings/tokens/{id}/revoke', function (Request $req, array 
 
 // ── API routes ────────────────────────────────────────────────────────────
 
-$router->get('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $pepper): void {
-    $token  = Middleware::requireApiToken($req, $tokenRepo, 'notes:read', $pepper);
+$router->get('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+    $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:read', $pepper);
     $userId = $token->userId;
 
     $cursor  = $req->query('cursor');
@@ -526,8 +596,8 @@ $router->get('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo
     ]);
 });
 
-$router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $pepper): void {
-    $token  = Middleware::requireApiToken($req, $tokenRepo, 'notes:write', $pepper);
+$router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+    $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
 
     $body = $req->rawBody();
@@ -564,8 +634,8 @@ $router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRep
     ]);
 });
 
-$router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $pepper): void {
-    $token  = Middleware::requireApiToken($req, $tokenRepo, 'notes:write', $pepper);
+$router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+    $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
 
     $existing = $noteRepo->findById($args['id'], $userId);
@@ -601,8 +671,8 @@ $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($
     ]);
 });
 
-$router->delete('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $pepper): void {
-    $token  = Middleware::requireApiToken($req, $tokenRepo, 'notes:write', $pepper);
+$router->delete('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+    $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
 
     $existing = $noteRepo->findById($args['id'], $userId);

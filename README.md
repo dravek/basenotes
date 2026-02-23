@@ -31,6 +31,16 @@ docker compose exec app php bin/migrate.php
 # 5. Open http://localhost and register an account
 ```
 
+## Admin Access
+
+Promote an existing user to admin (after they register):
+
+```bash
+docker compose exec app php bin/admin-user.php promote --email you@example.com
+```
+
+Admins can manage users at `/app/admin/users` (enable/disable accounts).
+
 ## Environment Variables
 
 | Variable | Description |

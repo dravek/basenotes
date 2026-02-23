@@ -7,6 +7,7 @@ namespace App\Http;
 use App\Auth\Session;
 use App\Util\Csrf;
 use App\Repos\TokenRepository;
+use App\Repos\UserRepository;
 
 final class Middleware
 {
@@ -14,6 +15,22 @@ final class Middleware
     {
         if (Session::userId() === null) {
             header('Location: /login');
+            exit;
+        }
+    }
+
+    public static function requireAdmin(Request $request, UserRepository $userRepo): void
+    {
+        self::requireAuth($request);
+        $userId = Session::userId();
+        if ($userId === null) {
+            header('Location: /login');
+            exit;
+        }
+        $user = $userRepo->findById($userId);
+        if ($user === null || !$user->isAdmin) {
+            http_response_code(403);
+            echo '<!DOCTYPE html><html><body><h1>403 Forbidden</h1><p>Admin access required.</p></body></html>';
             exit;
         }
     }
@@ -142,6 +159,7 @@ final class Middleware
     public static function requireApiToken(
         Request $request,
         TokenRepository $tokenRepo,
+        UserRepository $userRepo,
         string $requiredScope,
         string $pepper,
     ): \App\Repos\TokenDto {
@@ -155,6 +173,11 @@ final class Middleware
 
         if ($token === null || $token->revokedAt !== null) {
             self::apiError(401, 'UNAUTHORIZED', 'Invalid or revoked token.');
+        }
+
+        $user = $userRepo->findById($token->userId);
+        if ($user === null || $user->disabledAt !== null) {
+            self::apiError(403, 'FORBIDDEN', 'User account is disabled.');
         }
 
         $scopes = explode(',', $token->scopes);
