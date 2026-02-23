@@ -142,6 +142,15 @@ docker compose exec app php bin/migrate.php
 
 ## VPS Production Deployment
 
+### Quick VPS Checklist (Docker)
+
+1. Install Docker + Compose v2.
+2. Point your domain A record to the VPS IP.
+3. Set `.env` with `APP_ENV=production`, `APP_PEPPER`, and a strong `DB_PASS`.
+4. Enable the production Caddy block with your domain + email.
+5. Map ports `80:80` and `443:443` in `docker-compose.yml`.
+6. `docker compose up -d` and run migrations.
+
 ### Requirements on the VPS
 
 - A VPS running Ubuntu 22.04 or 24.04 (or any Linux with Docker support)
@@ -226,6 +235,17 @@ notes.yourdomain.com {
 Replace `notes.yourdomain.com` with your actual domain and `your@email.com` with your email address. Caddy uses the email for Let's Encrypt certificate registration.
 
 ### Start the containers on the VPS
+
+Before you start, update the published ports for production:
+
+```yaml
+# docker-compose.yml (caddy service)
+ports:
+  - "80:80"
+  - "443:443"
+```
+
+The default `8080/8443` mapping is intended for local dev.
 
 ```bash
 docker compose up -d
@@ -348,6 +368,20 @@ Check that `DB_NAME`, `DB_USER`, and `DB_PASS` in `.env` match the Postgres cont
 docker compose down -v
 docker compose up -d
 docker compose exec app php bin/migrate.php
+```
+
+---
+
+## Keep It Running
+
+The Docker services are configured with `restart: unless-stopped` in `docker-compose.yml`, so they will:
+- Restart automatically if they crash.
+- Restart on VPS reboot.
+
+You can confirm with:
+
+```bash
+docker compose ps
 ```
 This deletes all data including the database.
 
