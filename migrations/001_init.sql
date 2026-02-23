@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at    INTEGER NOT NULL
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+    ON users (LOWER(email));
+
 CREATE TABLE IF NOT EXISTS notes (
     id          TEXT    PRIMARY KEY,
     user_id     TEXT    NOT NULL,

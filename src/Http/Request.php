@@ -54,7 +54,20 @@ final class Request
     public function header(string $name): string
     {
         $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-        return (string)($this->server[$key] ?? '');
+        if (isset($this->server[$key])) {
+            return (string)$this->server[$key];
+        }
+
+        if ($name === 'Authorization' || $key === 'HTTP_AUTHORIZATION') {
+            if (isset($this->server['REDIRECT_HTTP_AUTHORIZATION'])) {
+                return (string)$this->server['REDIRECT_HTTP_AUTHORIZATION'];
+            }
+            if (isset($this->server['HTTP_X_AUTHORIZATION'])) {
+                return (string)$this->server['HTTP_X_AUTHORIZATION'];
+            }
+        }
+
+        return '';
     }
 
     public function bearerToken(): string|null

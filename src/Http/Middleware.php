@@ -32,13 +32,18 @@ final class Middleware
      * Rate-limit POST /login: max 5 attempts per 15-minute window.
      * Returns remaining seconds of lockout (0 = not locked).
      */
-    public static function loginRateLimit(): int
+    public static function loginRateLimit(string $identity): int
     {
-        $window    = 15 * 60;
-        $maxTries  = 5;
-        $count     = (int)Session::get('login_attempts', 0);
-        $firstTime = (int)Session::get('login_first_attempt', 0);
-        $now       = time();
+        $window   = 15 * 60;
+        $maxTries = 5;
+        $now      = time();
+
+        $keyPrefix = 'login_' . hash('sha256', $identity);
+        $countKey  = $keyPrefix . '_count';
+        $firstKey  = $keyPrefix . '_first';
+
+        $count     = (int)Session::get($countKey, 0);
+        $firstTime = (int)Session::get($firstKey, 0);
 
         if ($count >= $maxTries) {
             $elapsed   = $now - $firstTime;
@@ -47,26 +52,34 @@ final class Middleware
                 return $remaining;
             }
             // Window expired — reset
-            Session::set('login_attempts', 0);
-            Session::set('login_first_attempt', 0);
+            Session::set($countKey, 0);
+            Session::set($firstKey, 0);
         }
 
         return 0;
     }
 
-    public static function recordFailedLogin(): void
+    public static function recordFailedLogin(string $identity): void
     {
-        $count = (int)Session::get('login_attempts', 0);
+        $keyPrefix = 'login_' . hash('sha256', $identity);
+        $countKey  = $keyPrefix . '_count';
+        $firstKey  = $keyPrefix . '_first';
+
+        $count = (int)Session::get($countKey, 0);
         if ($count === 0) {
-            Session::set('login_first_attempt', time());
+            Session::set($firstKey, time());
         }
-        Session::set('login_attempts', $count + 1);
+        Session::set($countKey, $count + 1);
     }
 
-    public static function resetLoginAttempts(): void
+    public static function resetLoginAttempts(string $identity): void
     {
-        Session::set('login_attempts', 0);
-        Session::set('login_first_attempt', 0);
+        $keyPrefix = 'login_' . hash('sha256', $identity);
+        $countKey  = $keyPrefix . '_count';
+        $firstKey  = $keyPrefix . '_first';
+
+        Session::set($countKey, 0);
+        Session::set($firstKey, 0);
     }
 
     /**

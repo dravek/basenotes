@@ -38,9 +38,18 @@ ob_start();
     </form>
     <?php endif; ?>
 </div>
-<link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
-<script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/easymde/dist/easymde.min.css"
+    integrity="sha384-KmPqgOgmOtqbzddweUPgPOnE1rM9KZWtMWScQ6oFpl2snUqfWiZrWQcz4Z4tBzaj"
+    crossorigin="anonymous"
+>
+<script
+    src="https://unpkg.com/easymde/dist/easymde.min.js"
+    integrity="sha384-6cUfs9CzSZGOBv1IhxoYfUQeOnpE59It3CVD1W6t1wG2Y8B8CjIbVA4U7l0bOnvE"
+    crossorigin="anonymous"
+></script>
 <?php
 $bodyContent = ob_get_clean();
-$title = $isNew ? 'New Note' : e($note->title);
+$title = $isNew ? 'New Note' : $note->title;
 require __DIR__ . '/../../views/layout.php';

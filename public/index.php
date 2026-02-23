@@ -80,28 +80,29 @@ $router->get('/login', function (Request $req) use ($userRepo): void {
 $router->post('/login', function (Request $req) use ($userRepo): void {
     Middleware::verifyCsrf($req);
 
-    $remaining = Middleware::loginRateLimit();
+    $email = trim($req->post('email'));
+    $identity = strtolower($email) . '|' . $req->ip();
+
+    $remaining = Middleware::loginRateLimit($identity);
     if ($remaining > 0) {
         $mins = (int)ceil($remaining / 60);
         $errors = ["Too many failed attempts. Try again in {$mins} minute(s)."];
-        $email  = $req->post('email');
         http_response_code(429);
         require __DIR__ . '/../views/login.php';
         return;
     }
 
-    $email    = trim($req->post('email'));
     $password = $req->post('password');
-    $user     = $userRepo->findByEmail($email);
+    $user     = $userRepo->findByEmail(strtolower($email));
 
     if ($user === null || !\App\Auth\Password::verify($password, $user->passwordHash)) {
-        Middleware::recordFailedLogin();
+        Middleware::recordFailedLogin($identity);
         $errors = ['Invalid email or password.'];
         require __DIR__ . '/../views/login.php';
         return;
     }
 
-    Middleware::resetLoginAttempts();
+    Middleware::resetLoginAttempts($identity);
     session_regenerate_id(true);
     \App\Auth\Session::set('user_id', $user->id);
     header('Location: /app/notes');
@@ -119,7 +120,7 @@ $router->get('/register', function (Request $req): void {
 $router->post('/register', function (Request $req) use ($userRepo): void {
     Middleware::verifyCsrf($req);
 
-    $email    = trim($req->post('email'));
+    $email    = strtolower(trim($req->post('email')));
     $password = $req->post('password');
 
     $errors = \App\Util\Validate::merge(
@@ -260,6 +261,12 @@ $router->post('/app/settings/password', function (Request $req) use ($userRepo):
     Middleware::verifyCsrf($req);
     $userId  = \App\Auth\Session::userId();
     $user    = $userRepo->findById($userId);
+
+    if ($user === null) {
+        \App\Auth\Session::destroy();
+        header('Location: /login');
+        exit;
+    }
 
     $current = $req->post('current_password');
     $new     = $req->post('new_password');
