@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Minimal Markdown notes web app. PHP 8.3 + SQLite + Docker + Caddy. No frameworks. Server-side rendering only.
+Minimal Markdown notes web app. PHP 8.3 + PostgreSQL + Docker + Caddy. No frameworks. Server-side rendering only.
 
 ## Running the App
 
@@ -66,7 +66,7 @@ These features are **mandatory** where naturally applicable:
 
 - IDs: `TEXT` in ULID format (sortable, URL-safe)
 - Timestamps: `INTEGER` (Unix epoch)
-- Use only ANSI-compatible SQL (no SQLite-specific functions) — designed for future Postgres migration
+- Use only ANSI-compatible SQL where possible; Postgres-specific features require explicit justification
 - Schema lives in `migrations/001_init.sql`; tables: `users`, `notes`, `api_tokens`
 
 ## API Conventions
@@ -84,7 +84,11 @@ Required `.env` keys (boot throws `RuntimeException` if missing or empty):
 |-----|-------------|
 | `APP_PEPPER` | 64-char hex string for HMAC-hashing API tokens. Changing it invalidates all tokens. |
 | `APP_ENV` | `development` or `production` |
-| `DB_PATH` | Absolute path inside container: `/var/www/html/data/notes.sqlite` |
+| `DB_HOST` | Docker service name for Postgres (`postgres`) |
+| `DB_PORT` | Postgres port (`5432`) |
+| `DB_NAME` | Database name |
+| `DB_USER` | Database user |
+| `DB_PASS` | Database password |
 
 Generate `APP_PEPPER`:
 ```bash

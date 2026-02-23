@@ -1,6 +1,6 @@
 # 📝 Basenotes
 
-A minimal, self-hosted Markdown notes app. No frameworks, no dependencies — just PHP 8.3, SQLite, and Docker.
+A minimal, self-hosted Markdown notes app. No frameworks, no dependencies — just PHP 8.3, PostgreSQL, and Docker.
 
 ## Features
 
@@ -8,7 +8,7 @@ A minimal, self-hosted Markdown notes app. No frameworks, no dependencies — ju
 - **Full-text search** across note titles and content
 - **REST API** with Bearer token auth and cursor pagination
 - **Mobile-friendly** — works down to 375px
-- Runs entirely in Docker — no PHP or SQLite install needed on your machine
+- Runs entirely in Docker — no PHP or PostgreSQL install needed on your machine
 
 ## Quick Start
 
@@ -37,7 +37,11 @@ docker compose exec app php bin/migrate.php
 |----------|-------------|
 | `APP_PEPPER` | 64-char hex string for HMAC-hashing API tokens. Generate once, never change. |
 | `APP_ENV` | `development` or `production` |
-| `DB_PATH` | Path to SQLite file inside the container. Default: `/var/www/html/data/notes.sqlite` |
+| `DB_HOST` | PostgreSQL host (Docker service name: `postgres`) |
+| `DB_PORT` | PostgreSQL port (default `5432`) |
+| `DB_NAME` | PostgreSQL database name |
+| `DB_USER` | PostgreSQL username |
+| `DB_PASS` | PostgreSQL password |
 
 ## API
 
@@ -68,7 +72,7 @@ curl -H "Authorization: Bearer nt_YOUR_TOKEN" http://localhost/api/v1/notes
 ## Tech Stack
 
 - **PHP 8.3-FPM** (Alpine) — no frameworks, PDO only
-- **SQLite 3** — single file database, stored in a named Docker volume
+- **PostgreSQL 16** — relational database, stored in a named Docker volume
 - **Caddy 2** — reverse proxy with automatic HTTPS in production
 - **EasyMDE** — Markdown editor loaded via CDN
 

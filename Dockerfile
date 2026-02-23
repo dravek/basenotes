@@ -1,7 +1,7 @@
 FROM php:8.3-fpm-alpine
 
-RUN apk add --no-cache sqlite-libs sqlite-dev \
-    && docker-php-ext-install pdo pdo_sqlite
+RUN apk add --no-cache postgresql-libs postgresql-dev \
+    && docker-php-ext-install pdo pdo_pgsql
 
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/custom.ini
 COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh

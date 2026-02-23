@@ -30,7 +30,7 @@ final class NoteRepository
                  FROM notes
                  WHERE user_id = :user_id
                    AND deleted_at IS NULL
-                   AND (title LIKE :q OR content_md LIKE :q)
+                   AND (title ILIKE :q OR content_md ILIKE :q)
                  ORDER BY updated_at DESC'
             );
             $stmt->execute(['user_id' => $userId, 'q' => '%' . $search . '%']);

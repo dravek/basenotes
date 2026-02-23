@@ -14,16 +14,27 @@ if (!file_exists($envPath)) {
 }
 
 try {
-    Env::load($envPath, ['APP_PEPPER', 'APP_ENV', 'DB_PATH']);
+    Env::load($envPath, [
+        'APP_PEPPER',
+        'APP_ENV',
+        'DB_HOST',
+        'DB_PORT',
+        'DB_NAME',
+        'DB_USER',
+        'DB_PASS',
+    ]);
 } catch (\RuntimeException $e) {
     fwrite(STDERR, "Error: " . $e->getMessage() . "\n");
     exit(1);
 }
 
-$dbPath = Env::get('DB_PATH');
-
 try {
-    $pdo = new PDO('sqlite:' . $dbPath, options: [
+    $pdo = new PDO(dsn: sprintf(
+        'pgsql:host=%s;port=%s;dbname=%s',
+        Env::get('DB_HOST'),
+        Env::get('DB_PORT'),
+        Env::get('DB_NAME'),
+    ), username: Env::get('DB_USER'), password: Env::get('DB_PASS'), options: [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);

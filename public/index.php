@@ -23,7 +23,15 @@ use App\Repos\UserRepository;
 use App\Util\Env;
 
 $envPath = __DIR__ . '/../.env';
-Env::load(file_exists($envPath) ? $envPath : '', ['APP_PEPPER', 'APP_ENV', 'DB_PATH']);
+Env::load(file_exists($envPath) ? $envPath : '', [
+    'APP_PEPPER',
+    'APP_ENV',
+    'DB_HOST',
+    'DB_PORT',
+    'DB_NAME',
+    'DB_USER',
+    'DB_PASS',
+]);
 
 // Global output escaping helper
 function e(string $value): string
@@ -34,7 +42,14 @@ function e(string $value): string
 Session::start();
 
 $pdo = new PDO(
-    'sqlite:' . Env::get('DB_PATH'),
+    dsn: sprintf(
+        'pgsql:host=%s;port=%s;dbname=%s',
+        Env::get('DB_HOST'),
+        Env::get('DB_PORT'),
+        Env::get('DB_NAME'),
+    ),
+    username: Env::get('DB_USER'),
+    password: Env::get('DB_PASS'),
     options: [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,

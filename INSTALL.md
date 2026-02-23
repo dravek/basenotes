@@ -12,7 +12,7 @@ Setup instructions for local development and VPS production deployment.
 | Docker Compose | v2 (plugin) | Included with Docker Desktop. On Linux: `apt install docker-compose-plugin` |
 | Git | Any | For cloning the repo |
 
-No PHP, SQLite, or Caddy installation required on your machine. Everything runs inside Docker.
+No PHP, PostgreSQL, or Caddy installation required on your machine. Everything runs inside Docker.
 
 ---
 
@@ -36,7 +36,11 @@ Open `.env` and fill in the required values:
 ```env
 APP_PEPPER=<generate this — see below>
 APP_ENV=development
-DB_PATH=/var/www/html/data/notes.sqlite
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=basenotes
+DB_USER=basenotes
+DB_PASS=basenotes
 ```
 
 **Generate `APP_PEPPER`** — run this once and paste the output into `.env`:
@@ -60,18 +64,18 @@ docker compose up -d
 ```
 
 This will:
-- Pull `php:8.3-fpm-alpine` and `caddy:2-alpine` images on first run
-- Build the PHP container with `pdo_sqlite` installed
-- Start both the `app` (PHP-FPM) and `caddy` (web server) services
-- Create named Docker volumes for the database and Caddy config
+- Pull `php:8.3-fpm-alpine`, `postgres:16-alpine`, and `caddy:2-alpine` images on first run
+- Build the PHP container with `pdo_pgsql` installed
+- Start `postgres`, `app` (PHP-FPM), and `caddy` (web server) services
+- Create named Docker volumes for PostgreSQL and Caddy data/config
 
-Check both containers are running:
+Check the containers are running:
 
 ```bash
 docker compose ps
 ```
 
-Both `app` and `caddy` should show `running`.
+`postgres`, `app`, and `caddy` should show `running`/`healthy`.
 
 ### 4. Run database migrations
 
@@ -86,7 +90,7 @@ Migration 001_init.sql applied successfully.
 Database setup complete.
 ```
 
-This creates `data/notes.sqlite` with all required tables inside the Docker volume.
+This creates all required tables in the PostgreSQL database container.
 
 ### 5. Open the app
 
@@ -105,7 +109,7 @@ docker compose down
 # Start again
 docker compose up -d
 
-# Stop AND delete all data (destructive — SQLite volume is removed)
+# Stop AND delete all data (destructive — PostgreSQL volume is removed)
 docker compose down -v
 ```
 
@@ -192,7 +196,11 @@ Set these values in `.env`:
 ```env
 APP_PEPPER=<64 random hex chars — generate same as local setup>
 APP_ENV=production
-DB_PATH=/var/www/html/data/notes.sqlite
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=basenotes
+DB_USER=basenotes
+DB_PASS=<strong password>
 ```
 
 ### Enable production Caddy config
@@ -243,19 +251,19 @@ docker compose exec app php bin/migrate.php
 
 ## Backups
 
-The SQLite database lives in a Docker named volume (`notes_data`). To back it up:
+The PostgreSQL database lives in a Docker named volume (`postgres_data`). To back it up:
 
 ### Manual backup
 
 ```bash
-docker compose exec app cp /var/www/html/data/notes.sqlite /var/www/html/data/notes_backup_$(date +%F).sqlite
+docker compose exec -T postgres pg_dump -U basenotes -d basenotes > basenotes_$(date +%F).sql
 ```
 
 ### Copy the backup off the VPS
 
 ```bash
 # Run this on your local machine
-scp user@YOUR_VPS_IP:/var/lib/docker/volumes/notes_notes_data/_data/notes.sqlite ./notes_backup.sqlite
+scp user@YOUR_VPS_IP:/var/www/notes/basenotes_YYYY-MM-DD.sql ./basenotes_backup.sql
 ```
 
 ### Automated daily backup (recommended)
@@ -263,10 +271,10 @@ scp user@YOUR_VPS_IP:/var/lib/docker/volumes/notes_notes_data/_data/notes.sqlite
 Add this cron job on the VPS (`crontab -e`):
 
 ```bash
-0 2 * * * docker exec notes-app-1 cp /var/www/html/data/notes.sqlite /var/www/html/data/notes_$(date +\%F).sqlite
+0 2 * * * cd /var/www/notes && docker compose exec -T postgres pg_dump -U basenotes -d basenotes > /var/www/notes/backups/basenotes_$(date +\%F).sql
 ```
 
-Adjust the container name (`notes-app-1`) to match your actual container name from `docker compose ps`.
+Make sure `/var/www/notes/backups` exists and is writable by the user running cron.
 
 ---
 
@@ -276,9 +284,8 @@ Adjust the container name (`notes-app-1`) to match your actual container name fr
 # Stop the app
 docker compose down
 
-# Copy your backup sqlite file into the volume
-docker run --rm -v notes_notes_data:/data -v $(pwd):/backup alpine \
-  cp /backup/notes_backup.sqlite /data/notes.sqlite
+# Restore backup into Postgres (destructive if schema/data already exists)
+docker compose exec -T postgres psql -U basenotes -d basenotes < basenotes_backup.sql
 
 # Start again
 docker compose up -d
@@ -292,7 +299,11 @@ docker compose up -d
 |----------|----------|-------------|
 | `APP_PEPPER` | Yes | 64-char hex string used to HMAC-hash API tokens. Generate once, never change. |
 | `APP_ENV` | Yes | `development` or `production`. Controls error display behaviour. |
-| `DB_PATH` | Yes | Absolute path to the SQLite file inside the container. Default: `/var/www/html/data/notes.sqlite` |
+| `DB_HOST` | Yes | PostgreSQL host. In Docker Compose this is `postgres`. |
+| `DB_PORT` | Yes | PostgreSQL port. Default: `5432`. |
+| `DB_NAME` | Yes | PostgreSQL database name. |
+| `DB_USER` | Yes | PostgreSQL username. |
+| `DB_PASS` | Yes | PostgreSQL password. |
 
 ---
 
@@ -316,16 +327,21 @@ docker compose restart app
 - Confirm ports 80 and 443 are open: `ufw allow 80 && ufw allow 443`
 - Check Caddy logs: `docker compose logs caddy`
 
-**Database file not found**
+**Database connection failed**
 ```bash
 docker compose exec app php bin/migrate.php
 ```
-If this fails, check `DB_PATH` in `.env` matches `/var/www/html/data/notes.sqlite` exactly.
-
-**Permission denied on `/data` directory**
+If this fails, check the `DB_*` values in `.env` and confirm the `postgres` service is healthy:
 ```bash
-docker compose exec app chown -R www-data:www-data /var/www/html/data
+docker compose ps
+docker compose logs postgres
 ```
+
+**Postgres credentials/authentication error**
+```bash
+docker compose logs postgres
+```
+Check that `DB_NAME`, `DB_USER`, and `DB_PASS` in `.env` match the Postgres container settings.
 
 **Reset everything and start fresh (destructive)**
 ```bash

@@ -28,3 +28,12 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     revoked_at   INTEGER NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_notes_user_deleted_updated
+    ON notes (user_id, deleted_at, updated_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user_created
+    ON api_tokens (user_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_token_hash
+    ON api_tokens (token_hash);
