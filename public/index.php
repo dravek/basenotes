@@ -534,7 +534,7 @@ $router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRep
     if (!json_validate($body)) {
         Middleware::apiError(400, 'BAD_REQUEST', 'Request body is not valid JSON.');
     }
-    $data = json_decode($body, assoc: true);
+    $data = json_decode($body, true);
 
     $title   = isset($data['title']) ? trim((string)$data['title']) : 'Untitled';
     $content = isset($data['content_md']) ? (string)$data['content_md'] : '';
@@ -577,7 +577,7 @@ $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($
     if (!json_validate($body)) {
         Middleware::apiError(400, 'BAD_REQUEST', 'Request body is not valid JSON.');
     }
-    $data = json_decode($body, assoc: true);
+    $data = json_decode($body, true);
 
     $title   = isset($data['title'])      ? trim((string)$data['title'])      : $existing->title;
     $content = isset($data['content_md']) ? (string)$data['content_md']        : $existing->contentMd;
