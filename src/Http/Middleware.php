@@ -83,6 +83,59 @@ final class Middleware
     }
 
     /**
+     * Rate-limit POST /recovery: max 5 attempts per 15-minute window.
+     * Returns remaining seconds of lockout (0 = not locked).
+     */
+    public static function recoveryRateLimit(string $identity): int
+    {
+        $window   = 15 * 60;
+        $maxTries = 5;
+        $now      = time();
+
+        $keyPrefix = 'recovery_' . hash('sha256', $identity);
+        $countKey  = $keyPrefix . '_count';
+        $firstKey  = $keyPrefix . '_first';
+
+        $count     = (int)Session::get($countKey, 0);
+        $firstTime = (int)Session::get($firstKey, 0);
+
+        if ($count >= $maxTries) {
+            $elapsed   = $now - $firstTime;
+            $remaining = $window - $elapsed;
+            if ($remaining > 0) {
+                return $remaining;
+            }
+            Session::set($countKey, 0);
+            Session::set($firstKey, 0);
+        }
+
+        return 0;
+    }
+
+    public static function recordFailedRecovery(string $identity): void
+    {
+        $keyPrefix = 'recovery_' . hash('sha256', $identity);
+        $countKey  = $keyPrefix . '_count';
+        $firstKey  = $keyPrefix . '_first';
+
+        $count = (int)Session::get($countKey, 0);
+        if ($count === 0) {
+            Session::set($firstKey, time());
+        }
+        Session::set($countKey, $count + 1);
+    }
+
+    public static function resetRecoveryAttempts(string $identity): void
+    {
+        $keyPrefix = 'recovery_' . hash('sha256', $identity);
+        $countKey  = $keyPrefix . '_count';
+        $firstKey  = $keyPrefix . '_first';
+
+        Session::set($countKey, 0);
+        Session::set($firstKey, 0);
+    }
+
+    /**
      * Authenticate API request via Bearer token.
      * Returns [TokenDto, userId] or sends 401 and exits.
      */

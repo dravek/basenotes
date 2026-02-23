@@ -21,6 +21,7 @@ ob_start();
                 <button type="submit" class="btn btn-primary">Save</button>
                 <a href="/app/notes" class="btn btn-secondary">Cancel</a>
                 <?php if (!$isNew): ?>
+                <a href="/app/notes/<?= e($note->id) ?>/export" class="btn btn-secondary">Export</a>
                 <button
                     type="submit"
                     form="delete-form"
@@ -41,12 +42,12 @@ ob_start();
 <link
     rel="stylesheet"
     href="https://unpkg.com/easymde/dist/easymde.min.css"
-    integrity="sha384-KmPqgOgmOtqbzddweUPgPOnE1rM9KZWtMWScQ6oFpl2snUqfWiZrWQcz4Z4tBzaj"
+    integrity="sha384-3AvV7152TgYAMYdGZPqG9BpmSH2ZW6ewTDL0QV5PyNkl19KMI+yLMdJz183N8A2d"
     crossorigin="anonymous"
 >
 <script
     src="https://unpkg.com/easymde/dist/easymde.min.js"
-    integrity="sha384-6cUfs9CzSZGOBv1IhxoYfUQeOnpE59It3CVD1W6t1wG2Y8B8CjIbVA4U7l0bOnvE"
+    integrity="sha384-YDXeUfPZ4SP6vJpnF+ZMmf4B1bax6yd4Q/aNbkvLidRD843hPG5RE67M0IYT4LOq"
     crossorigin="anonymous"
 ></script>
 <?php

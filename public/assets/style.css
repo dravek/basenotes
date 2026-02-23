@@ -309,6 +309,20 @@ input:focus, textarea:focus, select:focus {
     margin-bottom: .5rem;
 }
 
+.recovery-codes {
+    list-style: none;
+    padding-left: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: .4rem;
+    margin-bottom: .6rem;
+}
+
+.recovery-codes code {
+    display: inline-block;
+    font-size: .85rem;
+}
+
 /* ── Tokens table ─────────────────────────────────────────── */
 .tokens-table {
     width: 100%;

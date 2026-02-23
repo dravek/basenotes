@@ -18,6 +18,8 @@ use App\Http\Middleware;
 use App\Http\Request;
 use App\Http\Router;
 use App\Repos\NoteRepository;
+use App\Repos\RecoveryAuditRepository;
+use App\Repos\RecoveryCodeRepository;
 use App\Repos\TokenRepository;
 use App\Repos\UserRepository;
 use App\Util\Env;
@@ -59,6 +61,8 @@ $pdo = new PDO(
 $userRepo  = new UserRepository($pdo);
 $noteRepo  = new NoteRepository($pdo);
 $tokenRepo = new TokenRepository($pdo);
+$recoveryRepo = new RecoveryCodeRepository($pdo);
+$recoveryAuditRepo = new RecoveryAuditRepository($pdo);
 $pepper    = Env::get('APP_PEPPER');
 
 $request = new Request();
@@ -117,7 +121,7 @@ $router->get('/register', function (Request $req): void {
     require __DIR__ . '/../views/register.php';
 });
 
-$router->post('/register', function (Request $req) use ($userRepo): void {
+$router->post('/register', function (Request $req) use ($userRepo, $recoveryRepo, $pepper): void {
     Middleware::verifyCsrf($req);
 
     $email    = strtolower(trim($req->post('email')));
@@ -148,8 +152,85 @@ $router->post('/register', function (Request $req) use ($userRepo): void {
         updatedAt:    $now,
     );
     $userRepo->create($user);
+
+    $rawCodes = \App\Auth\RecoveryCode::generateBatch(10);
+    $hashes = array_map(
+        fn(string $raw) => \App\Auth\RecoveryCode::hash($raw, $pepper),
+        $rawCodes,
+    );
+    $recoveryRepo->createMany($user->id, $hashes);
+    $displayCodes = array_map(\App\Auth\RecoveryCode::format(...), $rawCodes);
+    \App\Auth\Session::set('new_recovery_codes', $displayCodes);
+
     session_regenerate_id(true);
     \App\Auth\Session::set('user_id', $user->id);
+    header('Location: /app/settings/recovery');
+    exit;
+});
+
+$router->get('/recovery', function (Request $req): void {
+    $errors = [];
+    require __DIR__ . '/../views/recovery.php';
+});
+
+$router->post('/recovery', function (Request $req) use ($userRepo, $recoveryRepo, $recoveryAuditRepo, $pepper): void {
+    Middleware::verifyCsrf($req);
+
+    $identity = $req->ip();
+    $remaining = Middleware::recoveryRateLimit($identity);
+    if ($remaining > 0) {
+        $mins = (int)ceil($remaining / 60);
+        $errors = ["Too many attempts. Try again in {$mins} minute(s)."];
+        http_response_code(429);
+        require __DIR__ . '/../views/recovery.php';
+        return;
+    }
+
+    $codeInput = $req->post('recovery_code');
+    $new       = $req->post('new_password');
+    $confirm   = $req->post('confirm_password');
+
+    $errors = \App\Util\Validate::merge(
+        \App\Util\Validate::required($codeInput, 'Recovery code'),
+        \App\Util\Validate::required($new, 'New password'),
+        \App\Util\Validate::minLength($new, 10, 'New password'),
+    );
+
+    if ($new !== $confirm) {
+        $errors[] = 'Passwords do not match.';
+    }
+
+    $normalized = \App\Auth\RecoveryCode::normalize((string)$codeInput);
+    if ($normalized === '') {
+        $errors[] = 'Recovery code is invalid.';
+    }
+
+    if ($errors !== []) {
+        require __DIR__ . '/../views/recovery.php';
+        return;
+    }
+
+    $hash = \App\Auth\RecoveryCode::hash($normalized, $pepper);
+    $code = $recoveryRepo->findValidByHash($hash);
+    if ($code === null) {
+        Middleware::recordFailedRecovery($identity);
+        $errors = ['Recovery code is invalid or already used.'];
+        require __DIR__ . '/../views/recovery.php';
+        return;
+    }
+
+    $userRepo->updatePassword($code->userId, \App\Auth\Password::hash($new));
+    $recoveryRepo->markUsed($code->id);
+    Middleware::resetRecoveryAttempts($identity);
+    $recoveryAuditRepo->record(
+        $code->userId,
+        'recovery_code_used',
+        $req->ip(),
+        $req->header('User-Agent'),
+    );
+
+    session_regenerate_id(true);
+    \App\Auth\Session::set('user_id', $code->userId);
     header('Location: /app/notes');
     exit;
 });
@@ -249,6 +330,34 @@ $router->post('/app/notes/{id}/delete', function (Request $req, array $args) use
     exit;
 });
 
+$router->get('/app/notes/{id}/export', function (Request $req, array $args) use ($noteRepo): void {
+    Middleware::requireAuth($req);
+    $userId = \App\Auth\Session::userId();
+    $note   = $noteRepo->findById($args['id'], $userId);
+    if ($note === null) {
+        http_response_code(404);
+        echo '<!DOCTYPE html><html><body><h1>Note not found.</h1></body></html>';
+        exit;
+    }
+
+    $base = trim($note->title);
+    if ($base === '') {
+        $base = 'note';
+    }
+    $base = preg_replace('/[^A-Za-z0-9]+/', '-', $base);
+    $base = trim($base, '-');
+    if ($base === '') {
+        $base = 'note';
+    }
+    $base = substr($base, 0, 80);
+    $filename = $base . '.md';
+
+    header('Content-Type: text/markdown; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    echo (string) $note->contentMd;
+    exit;
+});
+
 // ── Settings routes ───────────────────────────────────────────────────────
 
 $router->get('/app/settings/password', function (Request $req): void {
@@ -290,6 +399,39 @@ $router->post('/app/settings/password', function (Request $req) use ($userRepo):
     session_regenerate_id(true);
     $success = 'Password updated successfully.';
     require __DIR__ . '/../views/settings/password.php';
+});
+
+$router->get('/app/settings/recovery', function (Request $req): void {
+    Middleware::requireAuth($req);
+    $codes = \App\Auth\Session::get('new_recovery_codes');
+    \App\Auth\Session::set('new_recovery_codes', null);
+    require __DIR__ . '/../views/settings/recovery.php';
+});
+
+$router->post('/app/settings/recovery', function (Request $req) use ($recoveryRepo, $recoveryAuditRepo, $pepper): void {
+    Middleware::requireAuth($req);
+    Middleware::verifyCsrf($req);
+    $userId = \App\Auth\Session::userId();
+
+    $recoveryRepo->invalidateAll($userId);
+
+    $rawCodes = \App\Auth\RecoveryCode::generateBatch(10);
+    $hashes = array_map(
+        fn(string $raw) => \App\Auth\RecoveryCode::hash($raw, $pepper),
+        $rawCodes,
+    );
+    $recoveryRepo->createMany($userId, $hashes);
+
+    $displayCodes = array_map(\App\Auth\RecoveryCode::format(...), $rawCodes);
+    \App\Auth\Session::set('new_recovery_codes', $displayCodes);
+    $recoveryAuditRepo->record(
+        $userId,
+        'recovery_codes_regenerated',
+        $req->ip(),
+        $req->header('User-Agent'),
+    );
+    header('Location: /app/settings/recovery');
+    exit;
 });
 
 $router->get('/app/settings/tokens', function (Request $req) use ($tokenRepo): void {

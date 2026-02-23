@@ -21,6 +21,7 @@ $userId = Session::userId();
             <a href="/app/notes">Notes</a>
             <a href="/app/settings/tokens">Tokens</a>
             <a href="/app/settings/password">Password</a>
+            <a href="/app/settings/recovery">Recovery</a>
             <form method="POST" action="/logout" class="logout-form">
                 <input type="hidden" name="_csrf" value="<?= e(Csrf::token()) ?>">
                 <button type="submit">Logout</button>

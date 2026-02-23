@@ -28,6 +28,7 @@ ob_start();
         <button type="submit">Login</button>
     </form>
     <p class="auth-link">No account? <a href="/register">Register</a></p>
+    <p class="auth-link"><a href="/recovery">Use a recovery code</a></p>
 </div>
 <?php
 $bodyContent = ob_get_clean();
