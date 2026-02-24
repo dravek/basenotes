@@ -63,6 +63,53 @@ final class NoteRepository
         return $this->rowToDto($row);
     }
 
+    public function findByIdIncludingDeleted(string $id, string $userId): NoteDto|null
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
+             FROM notes
+             WHERE id = :id AND user_id = :user_id'
+        );
+        $stmt->execute(['id' => $id, 'user_id' => $userId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+        return $this->rowToDto($row);
+    }
+
+    public function findByIdForUpdate(string $id, string $userId): NoteDto|null
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
+             FROM notes
+             WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+             FOR UPDATE'
+        );
+        $stmt->execute(['id' => $id, 'user_id' => $userId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+        return $this->rowToDto($row);
+    }
+
+    public function findByIdForUpdateIncludingDeleted(string $id, string $userId): NoteDto|null
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
+             FROM notes
+             WHERE id = :id AND user_id = :user_id
+             FOR UPDATE'
+        );
+        $stmt->execute(['id' => $id, 'user_id' => $userId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+        return $this->rowToDto($row);
+    }
+
     public function create(NoteDto $dto): void
     {
         $stmt = $this->pdo->prepare(
@@ -106,6 +153,22 @@ final class NoteRepository
             'deleted_at' => time(),
             'id'         => $id,
             'user_id'    => $userId,
+        ]);
+    }
+
+    public function restore(NoteDto $dto): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE notes
+             SET title = :title, content_md = :content_md, updated_at = :updated_at, deleted_at = NULL
+             WHERE id = :id AND user_id = :user_id'
+        );
+        $stmt->execute([
+            'title'      => $dto->title,
+            'content_md' => $dto->contentMd,
+            'updated_at' => $dto->updatedAt,
+            'id'         => $dto->id,
+            'user_id'    => $dto->userId,
         ]);
     }
 

@@ -77,7 +77,7 @@ final class UserRepository
             'id'            => $dto->id,
             'email'         => $dto->email,
             'password_hash' => $dto->passwordHash,
-            'is_admin'      => $dto->isAdmin,
+            'is_admin'      => (int)$dto->isAdmin,
             'disabled_at'   => $dto->disabledAt,
             'created_at'    => $dto->createdAt,
             'updated_at'    => $dto->updatedAt,
@@ -137,7 +137,7 @@ final class UserRepository
             'UPDATE users SET is_admin = :is_admin, updated_at = :updated_at WHERE lower(email) = lower(:email)'
         );
         $stmt->execute([
-            'is_admin'  => $isAdmin,
+            'is_admin'  => (int)$isAdmin,
             'updated_at'=> time(),
             'email'     => $email,
         ]);

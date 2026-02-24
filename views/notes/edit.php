@@ -21,6 +21,7 @@ ob_start();
                 <button type="submit" class="btn btn-primary">Save</button>
                 <a href="/app/notes" class="btn btn-secondary">Cancel</a>
                 <?php if (!$isNew): ?>
+                <a href="/app/notes/<?= e($note->id) ?>/history" class="btn btn-secondary">History</a>
                 <a href="/app/notes/<?= e($note->id) ?>/export" class="btn btn-secondary">Export</a>
                 <button
                     type="submit"

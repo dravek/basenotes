@@ -18,6 +18,7 @@ use App\Http\Middleware;
 use App\Http\Request;
 use App\Http\Router;
 use App\Repos\NoteRepository;
+use App\Repos\NoteVersionRepository;
 use App\Repos\RecoveryAuditRepository;
 use App\Repos\RecoveryCodeRepository;
 use App\Repos\TokenRepository;
@@ -41,6 +42,73 @@ function e(string $value): string
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+final class WebAbortException extends RuntimeException
+{
+    public function __construct(public int $status, public string $html)
+    {
+        parent::__construct('Web request aborted', $status);
+    }
+}
+
+final class ApiAbortException extends RuntimeException
+{
+    public function __construct(
+        public int $status,
+        public string $errorCode,
+        public string $errorMessage,
+    ) {
+        parent::__construct('API request aborted', $status);
+    }
+}
+
+function webNotFound(string $message): never
+{
+    throw new WebAbortException(
+        404,
+        '<!DOCTYPE html><html><body><h1>' . e($message) . '</h1></body></html>',
+    );
+}
+
+function apiAbort(int $status, string $code, string $message): never
+{
+    throw new ApiAbortException($status, $code, $message);
+}
+
+function dbTransaction(PDO $pdo, callable $callback): mixed
+{
+    $pdo->beginTransaction();
+    try {
+        $result = $callback();
+        $pdo->commit();
+        return $result;
+    } catch (\Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function dbTransactionWeb(PDO $pdo, callable $callback): mixed
+{
+    try {
+        return dbTransaction($pdo, $callback);
+    } catch (WebAbortException $e) {
+        http_response_code($e->status);
+        echo $e->html;
+        exit;
+    }
+}
+
+function dbTransactionApi(PDO $pdo, callable $callback): mixed
+{
+    try {
+        return dbTransaction($pdo, $callback);
+    } catch (ApiAbortException $e) {
+        Middleware::apiError($e->status, $e->errorCode, $e->errorMessage);
+    }
+}
+
 Session::start();
 
 $pdo = new PDO(
@@ -60,6 +128,7 @@ $pdo = new PDO(
 
 $userRepo  = new UserRepository($pdo);
 $noteRepo  = new NoteRepository($pdo);
+$noteVersionRepo = new NoteVersionRepository($pdo);
 $tokenRepo = new TokenRepository($pdo);
 $recoveryRepo = new RecoveryCodeRepository($pdo);
 $recoveryAuditRepo = new RecoveryAuditRepository($pdo);
@@ -320,40 +389,112 @@ $router->get('/app/notes/{id}', function (Request $req, array $args) use ($noteR
     require __DIR__ . '/../views/notes/edit.php';
 });
 
-$router->post('/app/notes/{id}', function (Request $req, array $args) use ($noteRepo): void {
+$router->post('/app/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $pdo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
-    $note   = $noteRepo->findById($args['id'], $userId);
+    $title   = trim($req->post('title')) ?: 'Untitled';
+    $content = $req->post('content_md');
+
+    $noteId = $args['id'];
+    dbTransactionWeb($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $noteId, $title, $content): void {
+        $note = $noteRepo->findByIdForUpdate($noteId, $userId);
+        if ($note === null) {
+            webNotFound('Note not found.');
+        }
+
+        $now = time();
+        $noteVersionRepo->createSnapshot($note, 'update', $now);
+
+        $updated = new \App\Repos\NoteDto(
+            id:        $note->id,
+            userId:    $note->userId,
+            title:     $title,
+            contentMd: $content,
+            createdAt: $note->createdAt,
+            updatedAt: $now,
+            deletedAt: null,
+        );
+        $noteRepo->update($updated);
+    });
+
+    header('Location: /app/notes/' . $noteId);
+    exit;
+});
+
+$router->get('/app/notes/{id}/history', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo): void {
+    Middleware::requireAuth($req);
+    $userId = \App\Auth\Session::userId();
+    $note   = $noteRepo->findByIdIncludingDeleted($args['id'], $userId);
     if ($note === null) {
         http_response_code(404);
         echo '<!DOCTYPE html><html><body><h1>Note not found.</h1></body></html>';
         exit;
     }
 
-    $title   = trim($req->post('title')) ?: 'Untitled';
-    $content = $req->post('content_md');
-
-    $updated = new \App\Repos\NoteDto(
-        id:        $note->id,
-        userId:    $note->userId,
-        title:     $title,
-        contentMd: $content,
-        createdAt: $note->createdAt,
-        updatedAt: time(),
-        deletedAt: null,
-    );
-    $noteRepo->update($updated);
-    header('Location: /app/notes/' . $note->id);
-    exit;
+    $versions = $noteVersionRepo->listByNote($note->id, $userId, 100);
+    require __DIR__ . '/../views/notes/history.php';
 });
 
-$router->post('/app/notes/{id}/delete', function (Request $req, array $args) use ($noteRepo): void {
+$router->post('/app/notes/{id}/history/{versionId}/rollback', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $pdo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
-    $noteRepo->softDelete($args['id'], $userId);
-    header('Location: /app/notes');
+    $noteId = $args['id'];
+    $versionId = $args['versionId'];
+
+    dbTransactionWeb($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $noteId, $versionId): void {
+        $note = $noteRepo->findByIdForUpdateIncludingDeleted($noteId, $userId);
+        if ($note === null) {
+            webNotFound('Note not found.');
+        }
+
+        $version = $noteVersionRepo->findById($versionId, $noteId, $userId);
+        if ($version === null) {
+            webNotFound('Version not found.');
+        }
+
+        $now = time();
+        $noteVersionRepo->createSnapshot($note, 'rollback', $now);
+
+        $rolledBack = new \App\Repos\NoteDto(
+            id:        $note->id,
+            userId:    $note->userId,
+            title:     trim($version->title) !== '' ? $version->title : 'Untitled',
+            contentMd: $version->contentMd,
+            createdAt: $note->createdAt,
+            updatedAt: $now,
+            deletedAt: null,
+        );
+        if ($note->deletedAt !== null) {
+            $noteRepo->restore($rolledBack);
+            return;
+        }
+
+        $noteRepo->update($rolledBack);
+    });
+
+    header('Location: /app/notes/' . $noteId);
+    exit;
+});
+
+$router->post('/app/notes/{id}/delete', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $pdo): void {
+    Middleware::requireAuth($req);
+    Middleware::verifyCsrf($req);
+    $userId = \App\Auth\Session::userId();
+    $noteId = $args['id'];
+
+    dbTransactionWeb($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $noteId): void {
+        $note = $noteRepo->findByIdForUpdate($noteId, $userId);
+        if ($note === null) {
+            webNotFound('Note not found.');
+        }
+
+        $noteVersionRepo->createSnapshot($note, 'delete', time());
+        $noteRepo->softDelete($noteId, $userId);
+    });
+
+    header('Location: /app/notes/' . $noteId . '/history');
     exit;
 });
 
@@ -653,14 +794,9 @@ $router->get('/api/v1/notes/{id}', function (Request $req, array $args) use ($no
     ]);
 });
 
-$router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+$router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $tokenRepo, $userRepo, $pepper, $pdo): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
-
-    $existing = $noteRepo->findById($args['id'], $userId);
-    if ($existing === null) {
-        Middleware::apiError(404, 'NOT_FOUND', 'Note not found.');
-    }
 
     $body = $req->rawBody();
     if (!json_validate($body)) {
@@ -668,19 +804,30 @@ $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($
     }
     $data = json_decode($body, true);
 
-    $title   = isset($data['title'])      ? trim((string)$data['title'])      : $existing->title;
-    $content = isset($data['content_md']) ? (string)$data['content_md']        : $existing->contentMd;
+    $updated = dbTransactionApi($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $args, $data): \App\Repos\NoteDto {
+        $existing = $noteRepo->findByIdForUpdate($args['id'], $userId);
+        if ($existing === null) {
+            apiAbort(404, 'NOT_FOUND', 'Note not found.');
+        }
 
-    $updated = new \App\Repos\NoteDto(
-        id:        $existing->id,
-        userId:    $existing->userId,
-        title:     $title ?: 'Untitled',
-        contentMd: $content,
-        createdAt: $existing->createdAt,
-        updatedAt: time(),
-        deletedAt: null,
-    );
-    $noteRepo->update($updated);
+        $title   = isset($data['title'])      ? trim((string)$data['title']) : $existing->title;
+        $content = isset($data['content_md']) ? (string)$data['content_md']   : $existing->contentMd;
+        $now = time();
+
+        $noteVersionRepo->createSnapshot($existing, 'update', $now);
+
+        $updated = new \App\Repos\NoteDto(
+            id:        $existing->id,
+            userId:    $existing->userId,
+            title:     $title ?: 'Untitled',
+            contentMd: $content,
+            createdAt: $existing->createdAt,
+            updatedAt: $now,
+            deletedAt: null,
+        );
+        $noteRepo->update($updated);
+        return $updated;
+    });
 
     header('Content-Type: application/json');
     echo json_encode([
@@ -690,16 +837,19 @@ $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($
     ]);
 });
 
-$router->delete('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+$router->delete('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $tokenRepo, $userRepo, $pepper, $pdo): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
 
-    $existing = $noteRepo->findById($args['id'], $userId);
-    if ($existing === null) {
-        Middleware::apiError(404, 'NOT_FOUND', 'Note not found.');
-    }
+    dbTransactionApi($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $args): void {
+        $existing = $noteRepo->findByIdForUpdate($args['id'], $userId);
+        if ($existing === null) {
+            apiAbort(404, 'NOT_FOUND', 'Note not found.');
+        }
 
-    $noteRepo->softDelete($args['id'], $userId);
+        $noteVersionRepo->createSnapshot($existing, 'delete', time());
+        $noteRepo->softDelete($args['id'], $userId);
+    });
 
     header('Content-Type: application/json');
     echo json_encode(['deleted' => true]);
