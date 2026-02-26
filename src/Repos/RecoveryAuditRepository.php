@@ -21,7 +21,7 @@ final class RecoveryAuditRepository
             'user_id'    => $userId,
             'event'      => $event,
             'ip'         => $ip,
-            'user_agent' => $userAgent,
+            'user_agent' => mb_substr($userAgent, 0, 500),
             'created_at' => time(),
         ]);
     }

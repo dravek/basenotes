@@ -34,21 +34,14 @@ final class RecoveryCodeRepository
              VALUES (:id, :user_id, :code_hash, :created_at, :used_at)'
         );
 
-        $this->pdo->beginTransaction();
-        try {
-            foreach ($hashes as $hash) {
-                $stmt->execute([
-                    'id'         => Id::ulid(),
-                    'user_id'    => $userId,
-                    'code_hash'  => $hash,
-                    'created_at' => $now,
-                    'used_at'    => null,
-                ]);
-            }
-            $this->pdo->commit();
-        } catch (\Throwable $e) {
-            $this->pdo->rollBack();
-            throw $e;
+        foreach ($hashes as $hash) {
+            $stmt->execute([
+                'id'         => Id::ulid(),
+                'user_id'    => $userId,
+                'code_hash'  => $hash,
+                'created_at' => $now,
+                'used_at'    => null,
+            ]);
         }
     }
 

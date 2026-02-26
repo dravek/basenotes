@@ -197,4 +197,11 @@ final class Middleware
         echo json_encode(['error' => ['code' => $code, 'message' => $message]]);
         exit;
     }
+
+    public static function securityHeaders(): void
+    {
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: DENY');
+        header('Referrer-Policy: strict-origin-when-cross-origin');
+    }
 }
