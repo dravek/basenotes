@@ -111,6 +111,8 @@ function dbTransactionApi(PDO $pdo, callable $callback): mixed
 
 Session::start();
 
+Middleware::securityHeaders();
+
 $pdo = new PDO(
     dsn: sprintf(
         'pgsql:host=%s;port=%s;dbname=%s',
@@ -207,7 +209,7 @@ $router->get('/register', function (Request $req): void {
     require __DIR__ . '/../views/register.php';
 });
 
-$router->post('/register', function (Request $req) use ($userRepo, $recoveryRepo, $pepper): void {
+$router->post('/register', function (Request $req) use ($userRepo, $recoveryRepo, $pepper, $pdo): void {
     Middleware::verifyCsrf($req);
 
     $email    = strtolower(trim($req->post('email')));
@@ -239,14 +241,18 @@ $router->post('/register', function (Request $req) use ($userRepo, $recoveryRepo
         createdAt:    $now,
         updatedAt:    $now,
     );
-    $userRepo->create($user);
 
     $rawCodes = \App\Auth\RecoveryCode::generateBatch(10);
     $hashes = array_map(
         fn(string $raw) => \App\Auth\RecoveryCode::hash($raw, $pepper),
         $rawCodes,
     );
-    $recoveryRepo->createMany($user->id, $hashes);
+
+    dbTransaction($pdo, function () use ($userRepo, $recoveryRepo, $user, $hashes): void {
+        $userRepo->create($user);
+        $recoveryRepo->createMany($user->id, $hashes);
+    });
+
     $displayCodes = array_map(\App\Auth\RecoveryCode::format(...), $rawCodes);
     \App\Auth\Session::set('new_recovery_codes', $displayCodes);
 
@@ -359,7 +365,7 @@ $router->post('/app/notes', function (Request $req) use ($noteRepo): void {
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
 
-    $title   = trim($req->post('title')) ?: 'Untitled';
+    $title   = mb_substr(trim($req->post('title')) ?: 'Untitled', 0, 500);
     $content = $req->post('content_md');
 
     $now  = time();
@@ -393,7 +399,7 @@ $router->post('/app/notes/{id}', function (Request $req, array $args) use ($note
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
-    $title   = trim($req->post('title')) ?: 'Untitled';
+    $title   = mb_substr(trim($req->post('title')) ?: 'Untitled', 0, 500);
     $content = $req->post('content_md');
 
     $noteId = $args['id'];
@@ -619,19 +625,21 @@ $router->get('/app/settings/recovery', function (Request $req): void {
     require __DIR__ . '/../views/settings/recovery.php';
 });
 
-$router->post('/app/settings/recovery', function (Request $req) use ($recoveryRepo, $recoveryAuditRepo, $pepper): void {
+$router->post('/app/settings/recovery', function (Request $req) use ($recoveryRepo, $recoveryAuditRepo, $pepper, $pdo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
-
-    $recoveryRepo->invalidateAll($userId);
 
     $rawCodes = \App\Auth\RecoveryCode::generateBatch(10);
     $hashes = array_map(
         fn(string $raw) => \App\Auth\RecoveryCode::hash($raw, $pepper),
         $rawCodes,
     );
-    $recoveryRepo->createMany($userId, $hashes);
+
+    dbTransaction($pdo, function () use ($recoveryRepo, $userId, $hashes): void {
+        $recoveryRepo->invalidateAll($userId);
+        $recoveryRepo->createMany($userId, $hashes);
+    });
 
     $displayCodes = array_map(\App\Auth\RecoveryCode::format(...), $rawCodes);
     \App\Auth\Session::set('new_recovery_codes', $displayCodes);
@@ -660,7 +668,10 @@ $router->post('/app/settings/tokens', function (Request $req) use ($tokenRepo, $
     $userId = \App\Auth\Session::userId();
 
     $name = trim($req->post('name'));
-    $errors = \App\Util\Validate::required($name, 'Token name');
+    $errors = \App\Util\Validate::merge(
+        \App\Util\Validate::required($name, 'Token name'),
+        \App\Util\Validate::maxLength($name, 100, 'Token name'),
+    );
     if ($errors !== []) {
         $tokens = $tokenRepo->listByUser($userId);
         require __DIR__ . '/../views/settings/tokens.php';
@@ -669,7 +680,10 @@ $router->post('/app/settings/tokens', function (Request $req) use ($tokenRepo, $
 
     $raw   = \App\Auth\Token::generate();
     $hash  = \App\Auth\Token::hash($raw, $pepper);
-    $scope = $req->post('scopes') ?: 'notes:read';
+    $allowedScopes = ['notes:read', 'notes:read,notes:write'];
+    $scope = in_array($req->post('scopes'), $allowedScopes, strict: true)
+        ? $req->post('scopes')
+        : 'notes:read';
 
     $now   = time();
     $dto   = new \App\Repos\TokenDto(
@@ -753,6 +767,9 @@ $router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRep
     if ($title === '') {
         $title = 'Untitled';
     }
+    if (mb_strlen($title) > 500) {
+        Middleware::apiError(422, 'VALIDATION_ERROR', 'Title must not exceed 500 characters.');
+    }
 
     $now  = time();
     $note = new \App\Repos\NoteDto(
@@ -812,6 +829,9 @@ $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($
 
         $title   = isset($data['title'])      ? trim((string)$data['title']) : $existing->title;
         $content = isset($data['content_md']) ? (string)$data['content_md']   : $existing->contentMd;
+        if (mb_strlen($title) > 500) {
+            apiAbort(422, 'VALIDATION_ERROR', 'Title must not exceed 500 characters.');
+        }
         $now = time();
 
         $noteVersionRepo->createSnapshot($existing, 'update', $now);
