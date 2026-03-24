@@ -9,6 +9,7 @@ ob_start();
 ?>
 <div class="settings-box">
     <h1>API Tokens</h1>
+    <p id="token-copy-status" class="sr-only" role="status" aria-live="polite"></p>
 
     <?php if ($newRawToken !== null): ?>
     <div class="token-reveal">
@@ -20,7 +21,7 @@ ob_start();
 
     <h2>Generate New Token</h2>
     <?php if ($errors): ?>
-    <ul class="errors">
+    <ul class="errors" role="alert" aria-live="assertive" tabindex="-1">
         <?php foreach ($errors as $err): ?>
         <li><?= e($err) ?></li>
         <?php endforeach; ?>
@@ -82,8 +83,11 @@ ob_start();
 <script>
 function copyToken() {
     const el = document.getElementById('raw-token');
+    const status = document.getElementById('token-copy-status');
     navigator.clipboard.writeText(el.textContent).then(function() {
-        alert('Token copied to clipboard.');
+        status.textContent = 'Token copied to clipboard.';
+    }).catch(function() {
+        status.textContent = 'Unable to copy token automatically.';
     });
 }
 </script>

@@ -1,4 +1,9 @@
 document.addEventListener('DOMContentLoaded', function () {
+    var liveErrors = document.querySelector('.errors[role="alert"]');
+    if (liveErrors && document.activeElement === document.body) {
+        liveErrors.focus();
+    }
+
     // Initialise EasyMDE on the note content textarea
     var textarea = document.getElementById('note-content');
     if (textarea) {

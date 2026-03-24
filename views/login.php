@@ -9,7 +9,7 @@ ob_start();
 <div class="auth-box">
     <h1>Login</h1>
     <?php if ($errors): ?>
-    <ul class="errors">
+    <ul class="errors" role="alert" aria-live="assertive" tabindex="-1">
         <?php foreach ($errors as $err): ?>
         <li><?= e($err) ?></li>
         <?php endforeach; ?>
@@ -19,11 +19,11 @@ ob_start();
         <input type="hidden" name="_csrf" value="<?= e(Csrf::token()) ?>">
         <label>
             Email
-            <input type="email" name="email" value="<?= e($email) ?>" required autofocus>
+            <input type="email" name="email" value="<?= e($email) ?>" required autofocus autocomplete="email">
         </label>
         <label>
             Password
-            <input type="password" name="password" required>
+            <input type="password" name="password" required autocomplete="current-password">
         </label>
         <button type="submit">Login</button>
     </form>

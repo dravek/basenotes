@@ -6,6 +6,7 @@ ob_start();
 ?>
 <div class="settings-box">
     <h1>Recovery Codes</h1>
+    <p id="recovery-copy-status" class="sr-only" role="status" aria-live="polite"></p>
 
     <?php if (is_array($codes) && $codes !== []): ?>
     <div class="token-reveal">
@@ -30,9 +31,12 @@ ob_start();
 function copyRecoveryCodes() {
     var list = document.querySelectorAll('#recovery-codes code');
     var lines = [];
+    var status = document.getElementById('recovery-copy-status');
     list.forEach(function (item) { lines.push(item.textContent); });
     navigator.clipboard.writeText(lines.join("\n")).then(function () {
-        alert('Recovery codes copied to clipboard.');
+        status.textContent = 'Recovery codes copied to clipboard.';
+    }).catch(function () {
+        status.textContent = 'Unable to copy recovery codes automatically.';
     });
 }
 </script>

@@ -7,7 +7,7 @@ ob_start();
 <div class="auth-box">
     <h1>Account Recovery</h1>
     <?php if ($errors): ?>
-    <ul class="errors">
+    <ul class="errors" role="alert" aria-live="assertive" tabindex="-1">
         <?php foreach ($errors as $err): ?>
         <li><?= e($err) ?></li>
         <?php endforeach; ?>
@@ -17,15 +17,15 @@ ob_start();
         <input type="hidden" name="_csrf" value="<?= e(Csrf::token()) ?>">
         <label>
             Recovery Code
-            <input type="text" name="recovery_code" required autofocus>
+            <input type="text" name="recovery_code" required autofocus autocomplete="one-time-code">
         </label>
         <label>
             New Password <small>(10+ characters)</small>
-            <input type="password" name="new_password" required minlength="10">
+            <input type="password" name="new_password" required minlength="10" autocomplete="new-password">
         </label>
         <label>
             Confirm New Password
-            <input type="password" name="confirm_password" required minlength="10">
+            <input type="password" name="confirm_password" required minlength="10" autocomplete="new-password">
         </label>
         <button type="submit">Reset Password</button>
     </form>

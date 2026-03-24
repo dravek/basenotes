@@ -9,7 +9,9 @@ ob_start();
     <form method="POST" action="<?= e($formAction) ?>" class="note-form" id="note-form">
         <input type="hidden" name="_csrf" value="<?= e(Csrf::token()) ?>">
         <div class="note-form-header">
+            <label for="note-title" class="sr-only">Note title</label>
             <input
+                id="note-title"
                 type="text"
                 name="title"
                 value="<?= e($isNew ? '' : $note->title) ?>"
@@ -32,6 +34,7 @@ ob_start();
                 <?php endif; ?>
             </div>
         </div>
+        <label for="note-content" class="sr-only">Note content (Markdown)</label>
         <textarea name="content_md" id="note-content" class="note-content"><?= e($isNew ? '' : $note->contentMd) ?></textarea>
     </form>
     <?php if (!$isNew): ?>
