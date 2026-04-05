@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
 /** @var list<\App\Repos\NoteDto> $notes */
 /** @var string $search */
-use App\Util\Csrf;
 $search ??= '';
 ob_start();
 ?>

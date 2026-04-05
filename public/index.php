@@ -20,6 +20,8 @@ use App\Http\Request;
 use App\Http\Router;
 use App\Repos\AuditLogRepository;
 use App\Repos\NoteRepository;
+use App\Repos\TagRepository;
+use App\Repos\NoteTagRepository;
 use App\Repos\NoteVersionRepository;
 use App\Repos\RecoveryAuditRepository;
 use App\Repos\RecoveryCodeRepository;
@@ -133,6 +135,8 @@ $pdo = new PDO(
 $userRepo  = new UserRepository($pdo);
 $noteRepo  = new NoteRepository($pdo);
 $noteVersionRepo = new NoteVersionRepository($pdo);
+$tagRepo = new TagRepository($pdo);
+$noteTagRepo = new NoteTagRepository($pdo);
 $tokenRepo = new TokenRepository($pdo);
 $recoveryRepo = new RecoveryCodeRepository($pdo);
 $recoveryAuditRepo = new RecoveryAuditRepository($pdo);
