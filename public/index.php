@@ -135,6 +135,7 @@ $noteVersionRepo = new NoteVersionRepository($pdo);
 $tokenRepo = new TokenRepository($pdo);
 $recoveryRepo = new RecoveryCodeRepository($pdo);
 $recoveryAuditRepo = new RecoveryAuditRepository($pdo);
+$auditRepo = new AuditLogRepository($pdo);
 $pepper    = Env::get('APP_PEPPER');
 
 $sessionUserId = Session::userId();
