@@ -31,7 +31,7 @@ final class NoteRepository
         $params = ['user_id' => $userId];
 
         if ($search !== null) {
-            $where[] = '(n.title ILIKE :q OR n.content_md ILIKE :q)';
+            $where[] = '(n.title ILIKE :q OR n.content_md ILIKE :q OR EXISTS (SELECT 1 FROM note_tags nt INNER JOIN tags t ON t.id = nt.tag_id WHERE nt.note_id = n.id AND (t.name ILIKE :q OR t.slug ILIKE :q)))';
             $params['q'] = '%' . $search . '%';
         }
 
