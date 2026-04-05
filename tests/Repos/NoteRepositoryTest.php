@@ -27,7 +27,7 @@ final class NoteRepositoryTest extends TestCase
         $pdo->exec("INSERT INTO tags VALUES ('t1', 'Work Stuff', 'work-stuff', 100, 100)");
         $pdo->exec("INSERT INTO note_tags VALUES ('n1', 't1', 100)");
 
-        $notes = $repo->listByUser('u1', 'work', null);
+        $notes = $repo->listByUser('u1', null, 'work-stuff');
         $this->assertCount(1, $notes);
         $this->assertSame('n1', $notes[0]->id);
     }
