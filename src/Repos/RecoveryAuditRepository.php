@@ -22,7 +22,7 @@ final class RecoveryAuditRepository
             'event'      => $event,
             'ip'         => $ip,
             'user_agent' => mb_substr($userAgent, 0, 500),
-            'created_at' => time(),
+            'created_at' => \App\Util\Clock::now(),
         ]);
     }
 }

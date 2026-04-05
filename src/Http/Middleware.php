@@ -53,7 +53,7 @@ final class Middleware
     {
         $window   = 15 * 60;
         $maxTries = 5;
-        $now      = time();
+        $now      = \App\Util\Clock::now();
 
         $keyPrefix = 'login_' . hash('sha256', $identity);
         $countKey  = $keyPrefix . '_count';
@@ -84,7 +84,7 @@ final class Middleware
 
         $count = (int)Session::get($countKey, 0);
         if ($count === 0) {
-            Session::set($firstKey, time());
+            Session::set($firstKey, \App\Util\Clock::now());
         }
         Session::set($countKey, $count + 1);
     }
@@ -107,7 +107,7 @@ final class Middleware
     {
         $window   = 15 * 60;
         $maxTries = 5;
-        $now      = time();
+        $now      = \App\Util\Clock::now();
 
         $keyPrefix = 'recovery_' . hash('sha256', $identity);
         $countKey  = $keyPrefix . '_count';
@@ -137,7 +137,7 @@ final class Middleware
 
         $count = (int)Session::get($countKey, 0);
         if ($count === 0) {
-            Session::set($firstKey, time());
+            Session::set($firstKey, \App\Util\Clock::now());
         }
         Session::set($countKey, $count + 1);
     }

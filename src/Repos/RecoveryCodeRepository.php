@@ -28,7 +28,7 @@ final class RecoveryCodeRepository
             return;
         }
 
-        $now = time();
+        $now = \App\Util\Clock::now();
         $stmt = $this->pdo->prepare(
             'INSERT INTO recovery_codes (id, user_id, code_hash, created_at, used_at)
              VALUES (:id, :user_id, :code_hash, :created_at, :used_at)'
@@ -72,7 +72,7 @@ final class RecoveryCodeRepository
             'UPDATE recovery_codes SET used_at = :used_at WHERE id = :id AND used_at IS NULL'
         );
         $stmt->execute([
-            'used_at' => time(),
+            'used_at' => \App\Util\Clock::now(),
             'id'      => $id,
         ]);
     }
@@ -83,7 +83,7 @@ final class RecoveryCodeRepository
             'UPDATE recovery_codes SET used_at = :used_at WHERE user_id = :user_id AND used_at IS NULL'
         );
         $stmt->execute([
-            'used_at' => time(),
+            'used_at' => \App\Util\Clock::now(),
             'user_id' => $userId,
         ]);
     }

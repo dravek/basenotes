@@ -231,7 +231,7 @@ $router->post('/register', function (Request $req) use ($userRepo, $recoveryRepo
         return;
     }
 
-    $now  = time();
+    $now      = \App\Util\Clock::now();
     $user = new \App\Repos\UserDto(
         id:           \App\Util\Id::ulid(),
         email:        $email,
@@ -368,7 +368,7 @@ $router->post('/app/notes', function (Request $req) use ($noteRepo): void {
     $title   = mb_substr(trim($req->post('title')) ?: 'Untitled', 0, 500);
     $content = $req->post('content_md');
 
-    $now  = time();
+    $now      = \App\Util\Clock::now();
     $note = new \App\Repos\NoteDto(
         id:        \App\Util\Id::ulid(),
         userId:    $userId,
@@ -409,7 +409,7 @@ $router->post('/app/notes/{id}', function (Request $req, array $args) use ($note
             webNotFound('Note not found.');
         }
 
-        $now = time();
+        $now      = \App\Util\Clock::now();
         $noteVersionRepo->createSnapshot($note, 'update', $now);
 
         $updated = new \App\Repos\NoteDto(
@@ -460,7 +460,7 @@ $router->post('/app/notes/{id}/history/{versionId}/rollback', function (Request 
             webNotFound('Version not found.');
         }
 
-        $now = time();
+        $now      = \App\Util\Clock::now();
         $noteVersionRepo->createSnapshot($note, 'rollback', $now);
 
         $rolledBack = new \App\Repos\NoteDto(
@@ -496,7 +496,7 @@ $router->post('/app/notes/{id}/delete', function (Request $req, array $args) use
             webNotFound('Note not found.');
         }
 
-        $noteVersionRepo->createSnapshot($note, 'delete', time());
+        $noteVersionRepo->createSnapshot($note, 'delete', \App\Util\Clock::now());
         $noteRepo->softDelete($noteId, $userId);
     });
 
@@ -555,7 +555,7 @@ $router->post('/app/admin/users/{id}/disable', function (Request $req, array $ar
         echo '<!DOCTYPE html><html><body><h1>400 Bad Request</h1><p>You cannot disable your own account.</p></body></html>';
         exit;
     }
-    $userRepo->setDisabledAt($targetId, time());
+    $userRepo->setDisabledAt($targetId, \App\Util\Clock::now());
     header('Location: /app/admin/users');
     exit;
 });
@@ -685,7 +685,7 @@ $router->post('/app/settings/tokens', function (Request $req) use ($tokenRepo, $
         ? $req->post('scopes')
         : 'notes:read';
 
-    $now   = time();
+    $now      = \App\Util\Clock::now();
     $dto   = new \App\Repos\TokenDto(
         id:         \App\Util\Id::ulid(),
         userId:     $userId,
@@ -771,7 +771,7 @@ $router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRep
         Middleware::apiError(422, 'VALIDATION_ERROR', 'Title must not exceed 500 characters.');
     }
 
-    $now  = time();
+    $now      = \App\Util\Clock::now();
     $note = new \App\Repos\NoteDto(
         id:        \App\Util\Id::ulid(),
         userId:    $userId,
@@ -832,7 +832,7 @@ $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($
         if (mb_strlen($title) > 500) {
             apiAbort(422, 'VALIDATION_ERROR', 'Title must not exceed 500 characters.');
         }
-        $now = time();
+        $now      = \App\Util\Clock::now();
 
         $noteVersionRepo->createSnapshot($existing, 'update', $now);
 
@@ -867,7 +867,7 @@ $router->delete('/api/v1/notes/{id}', function (Request $req, array $args) use (
             apiAbort(404, 'NOT_FOUND', 'Note not found.');
         }
 
-        $noteVersionRepo->createSnapshot($existing, 'delete', time());
+        $noteVersionRepo->createSnapshot($existing, 'delete', \App\Util\Clock::now());
         $noteRepo->softDelete($args['id'], $userId);
     });
 

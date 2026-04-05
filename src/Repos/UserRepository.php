@@ -91,7 +91,7 @@ final class UserRepository
         );
         $stmt->execute([
             'password_hash' => $passwordHash,
-            'updated_at'    => time(),
+            'updated_at'    => \App\Util\Clock::now(),
             'id'            => $id,
         ]);
     }
@@ -126,7 +126,7 @@ final class UserRepository
         );
         $stmt->execute([
             'disabled_at' => $disabledAt,
-            'updated_at'  => time(),
+            'updated_at'  => \App\Util\Clock::now(),
             'id'          => $id,
         ]);
     }
@@ -138,7 +138,7 @@ final class UserRepository
         );
         $stmt->execute([
             'is_admin'  => (int)$isAdmin,
-            'updated_at'=> time(),
+            'updated_at'=> \App\Util\Clock::now(),
             'email'     => $email,
         ]);
         return $stmt->rowCount() > 0;

@@ -52,7 +52,7 @@ final class Session
             setcookie(
                 session_name(),
                 '',
-                time() - 42000,
+                \App\Util\Clock::now() - 42000,
                 $params['path'],
                 $params['domain'],
                 $params['secure'],
