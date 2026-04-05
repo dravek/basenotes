@@ -1,7 +1,7 @@
 <?php declare(strict_types=1);
 /** @var list<\App\Repos\NoteDto> $notes */
+/** @var array<string, list<string>> $noteTags */
 /** @var string $search */
-use App\Util\Csrf;
 $search ??= '';
 ob_start();
 ?>
@@ -31,6 +31,13 @@ ob_start();
             <a href="/app/notes/<?= e($note->id) ?>" class="note-link">
                 <span class="note-title"><?= e($note->title) ?></span>
                 <span class="note-preview"><?= e(mb_strimwidth(strip_tags($note->contentMd), 0, 120, '…')) ?></span>
+                <?php if (!empty($noteTags[$note->id] ?? [])): ?>
+                <span class="note-tags">
+                    <?php foreach ($noteTags[$note->id] as $tag): ?>
+                    <span class="tag-chip"><?= e($tag) ?></span>
+                    <?php endforeach; ?>
+                </span>
+                <?php endif; ?>
                 <span class="note-date"><?= e(date('d M Y', $note->updatedAt)) ?></span>
             </a>
         </li>

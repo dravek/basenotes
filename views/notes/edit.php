@@ -1,5 +1,6 @@
 <?php declare(strict_types=1);
 /** @var \App\Repos\NoteDto|null $note */
+/** @var list<string> $tags */
 use App\Util\Csrf;
 $isNew = $note === null;
 $formAction = $isNew ? '/app/notes' : '/app/notes/' . $note->id;
@@ -34,6 +35,15 @@ ob_start();
                 <?php endif; ?>
             </div>
         </div>
+        <label for="note-tags">Tags</label>
+        <input
+            id="note-tags"
+            type="text"
+            name="tags"
+            value="<?= e(implode(', ', $tags ?? [])) ?>"
+            placeholder="work, ideas, home"
+            class="note-tags-input"
+        >
         <label for="note-content" class="sr-only">Note content (Markdown)</label>
         <textarea name="content_md" id="note-content" class="note-content"><?= e($isNew ? '' : $note->contentMd) ?></textarea>
     </form>
