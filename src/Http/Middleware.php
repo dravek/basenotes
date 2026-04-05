@@ -206,7 +206,11 @@ final class Middleware
             self::apiError(403, 'FORBIDDEN', 'Token does not have required scope.');
         }
 
-        $tokenRepo->updateLastUsed($token->id);
+        try {
+            $tokenRepo->updateLastUsed($token->id);
+        } catch (\Throwable $e) {
+            self::apiError(500, 'INTERNAL_ERROR', 'Unable to update token usage.');
+        }
 
         return $token;
     }
