@@ -8,6 +8,7 @@ ob_start();
 <div class="settings-box">
     <h1>Users</h1>
     <p>Manage access for registered users.</p>
+    <p><a href="/app/admin/audit">View audit log</a></p>
     <?php if (count($users) === 0): ?>
     <p>No users found.</p>
     <?php else: ?>

@@ -14,10 +14,10 @@ spl_autoload_register(function (string $class): void {
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 use App\Auth\Session;
+use App\Http\Audit;
 use App\Http\Middleware;
 use App\Http\Request;
 use App\Http\Router;
-use App\Http\Audit;
 use App\Repos\AuditLogRepository;
 use App\Repos\NoteRepository;
 use App\Repos\NoteVersionRepository;
@@ -589,6 +589,12 @@ $router->post('/app/admin/users/{id}/enable', function (Request $req, array $arg
 });
 
 // ── Settings routes ───────────────────────────────────────────────────────
+
+$router->get('/app/admin/audit', function (Request $req) use ($userRepo, $auditRepo): void {
+    Middleware::requireAdmin($req, $userRepo);
+    $auditRows = $auditRepo->listRecent(100);
+    require __DIR__ . '/../views/admin/audit.php';
+});
 
 $router->get('/app/settings/password', function (Request $req): void {
     Middleware::requireAuth($req);
