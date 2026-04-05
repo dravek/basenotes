@@ -14,6 +14,7 @@ spl_autoload_register(function (string $class): void {
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 use App\Auth\Session;
+use App\Http\Audit;
 use App\Http\Middleware;
 use App\Http\Request;
 use App\Http\Router;
@@ -540,7 +541,7 @@ $router->get('/app/admin/users', function (Request $req) use ($userRepo): void {
     require __DIR__ . '/../views/admin/users.php';
 });
 
-$router->post('/app/admin/users/{id}/disable', function (Request $req, array $args) use ($userRepo): void {
+$router->post('/app/admin/users/{id}/disable', function (Request $req, array $args) use ($userRepo, $auditRepo): void {
     Middleware::requireAdmin($req, $userRepo);
     Middleware::verifyCsrf($req);
     $targetId = $args['id'];
@@ -556,11 +557,12 @@ $router->post('/app/admin/users/{id}/disable', function (Request $req, array $ar
         exit;
     }
     $userRepo->setDisabledAt($targetId, \App\Util\Clock::now());
+    Audit::record($auditRepo, 'user_disabled', $targetId, 'user', $targetId);
     header('Location: /app/admin/users');
     exit;
 });
 
-$router->post('/app/admin/users/{id}/enable', function (Request $req, array $args) use ($userRepo): void {
+$router->post('/app/admin/users/{id}/enable', function (Request $req, array $args) use ($userRepo, $auditRepo): void {
     Middleware::requireAdmin($req, $userRepo);
     Middleware::verifyCsrf($req);
     $targetId = $args['id'];
@@ -571,18 +573,25 @@ $router->post('/app/admin/users/{id}/enable', function (Request $req, array $arg
         exit;
     }
     $userRepo->setDisabledAt($targetId, null);
+    Audit::record($auditRepo, 'user_enabled', $targetId, 'user', $targetId);
     header('Location: /app/admin/users');
     exit;
 });
 
 // ── Settings routes ───────────────────────────────────────────────────────
 
+$router->get('/app/admin/audit', function (Request $req) use ($userRepo, $auditRepo): void {
+    Middleware::requireAdmin($req, $userRepo);
+    $auditRows = $auditRepo->listRecent(100);
+    require __DIR__ . '/../views/admin/audit.php';
+});
+
 $router->get('/app/settings/password', function (Request $req): void {
     Middleware::requireAuth($req);
     require __DIR__ . '/../views/settings/password.php';
 });
 
-$router->post('/app/settings/password', function (Request $req) use ($userRepo): void {
+$router->post('/app/settings/password', function (Request $req) use ($userRepo, $auditRepo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId  = \App\Auth\Session::userId();
@@ -613,6 +622,7 @@ $router->post('/app/settings/password', function (Request $req) use ($userRepo):
     }
 
     $userRepo->updatePassword($userId, \App\Auth\Password::hash($new));
+    Audit::record($auditRepo, 'password_changed', $userId, 'user', $userId);
     session_regenerate_id(true);
     $success = 'Password updated successfully.';
     require __DIR__ . '/../views/settings/password.php';
