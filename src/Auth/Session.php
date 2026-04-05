@@ -39,7 +39,7 @@ final class Session
             'lifetime' => 0,
             'path'     => '/',
             'domain'   => '',
-            'secure'   => true,
+            'secure'   => !in_array($_SERVER['APP_ENV'] ?? 'production', ['development', 'dev'], true),
             'httponly' => true,
             'samesite' => 'Strict',
         ]);

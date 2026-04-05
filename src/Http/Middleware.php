@@ -206,7 +206,11 @@ final class Middleware
             self::apiError(403, 'FORBIDDEN', 'Token does not have required scope.');
         }
 
-        $tokenRepo->updateLastUsed($token->id);
+        try {
+            $tokenRepo->updateLastUsed($token->id);
+        } catch (\Throwable $e) {
+            self::apiError(500, 'INTERNAL_ERROR', 'Unable to update token usage.');
+        }
 
         return $token;
     }
@@ -224,5 +228,6 @@ final class Middleware
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
         header('Referrer-Policy: strict-origin-when-cross-origin');
+        header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://unpkg.com; script-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' data:; form-action 'self'; base-uri 'self'; frame-ancestors 'none'");
     }
 }
