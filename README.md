@@ -7,6 +7,9 @@ A minimal, self-hosted Markdown notes app. No frameworks, no dependencies — ju
 - **Markdown editor** powered by [EasyMDE](https://github.com/Ionaru/easy-markdown-editor)
 - **Full-text search** across note titles and content
 - **REST API** with Bearer token auth and cursor pagination
+- **Note version history** with rollback support
+- **Recovery codes** for account recovery
+- **Admin user management** to enable/disable accounts
 - **Mobile-friendly** — works down to 375px
 - Runs entirely in Docker — no PHP or PostgreSQL install needed on your machine
 
@@ -28,7 +31,7 @@ docker compose up -d
 # 4. Run migrations
 docker compose exec app php bin/migrate.php
 
-# 5. Open http://localhost and register an account
+# 5. Open http://localhost:8080 and register an account
 ```
 
 ## Admin Access
@@ -40,6 +43,17 @@ docker compose exec app php bin/admin-user.php promote --email you@example.com
 ```
 
 Admins can manage users at `/app/admin/users` (enable/disable accounts).
+
+## Core Capabilities
+
+Basenotes includes:
+
+- password authentication and session-based login
+- one-time recovery codes and recovery audit logging
+- per-user note ownership and soft deletion
+- note history with snapshots and rollback
+- API token management with scoped Bearer tokens
+- an admin area for account enable/disable operations
 
 ## Environment Variables
 
@@ -108,6 +122,15 @@ curl -H "Authorization: Bearer nt_YOUR_TOKEN" http://localhost/api/v1/notes/<not
 
 See [INSTALL.md](INSTALL.md) for full instructions including production Caddy config, SSL, backups, and updating.
 
+## Local Ports
+
+By default, the development Caddy container serves the app at:
+
+- `http://localhost:8080`
+- `https://localhost:8443` (if you enable HTTPS locally)
+
+These ports come from `docker-compose.yml`.
+
 ## Project Structure
 
 ```
@@ -119,6 +142,5 @@ src/
   Repos/                # PDO repositories for users, notes, tokens
   Util/                 # Env loader, ULID generator, CSRF, validation
 views/                  # PHP templates — rendering only, no business logic
-assets/                 # style.css + app.js (served directly by Caddy from public/assets/)
 migrations/             # SQL schema files, run via bin/migrate.php
 ```
