@@ -365,7 +365,8 @@ $router->get('/app/notes', function (Request $req) use ($noteRepo, $noteTagRepo)
     Middleware::requireAuth($req);
     $userId = \App\Auth\Session::userId();
     $search = $req->query('q');
-    $notes  = $noteRepo->listByUser($userId, $search !== '' ? $search : null);
+    $tagSlug = $req->query('tag');
+    $notes  = $noteRepo->listByUser($userId, $search !== '' ? $search : null, $tagSlug !== '' ? $tagSlug : null);
     $noteTags = [];
     foreach ($notes as $note) {
         $noteTags[$note->id] = $noteTagRepo->listTagNamesForNote($note->id);
@@ -388,7 +389,7 @@ $router->post('/app/notes', function (Request $req) use ($noteRepo, $tagRepo, $p
     $title   = mb_substr(trim($req->post('title')) ?: 'Untitled', 0, 500);
     $content = $req->post('content_md');
     $tagsInput = $req->post('tags');
-    $tags = array_values(array_filter(array_map('trim', explode(',', $tagsInput))));
+    $tags = array_values(array_unique(array_filter(array_map('trim', explode(',', $tagsInput)))));
 
     $now      = \App\Util\Clock::now();
     $note = new \App\Repos\NoteDto(
@@ -430,7 +431,7 @@ $router->post('/app/notes/{id}', function (Request $req, array $args) use ($note
     $title   = mb_substr(trim($req->post('title')) ?: 'Untitled', 0, 500);
     $content = $req->post('content_md');
     $tagsInput = $req->post('tags');
-    $tags = array_values(array_filter(array_map('trim', explode(',', $tagsInput))));
+    $tags = array_values(array_unique(array_filter(array_map('trim', explode(',', $tagsInput)))));
 
     $noteId = $args['id'];
     dbTransactionWeb($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $noteId, $title, $content): void {

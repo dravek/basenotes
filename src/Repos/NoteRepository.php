@@ -22,28 +22,27 @@ final class NoteRepository
     public function __construct(private \PDO $pdo) {}
 
     /** @return list<NoteDto> */
-    public function listByUser(string $userId, ?string $search = null): array
+    public function listByUser(string $userId, ?string $search = null, ?string $tagSlug = null): array
     {
+        $where = [
+            'n.user_id = :user_id',
+            'n.deleted_at IS NULL',
+        ];
+        $params = ['user_id' => $userId];
+
         if ($search !== null) {
-            $stmt = $this->pdo->prepare(
-                'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-                 FROM notes
-                 WHERE user_id = :user_id
-                   AND deleted_at IS NULL
-                   AND (title ILIKE :q OR content_md ILIKE :q)
-                 ORDER BY updated_at DESC'
-            );
-            $stmt->execute(['user_id' => $userId, 'q' => '%' . $search . '%']);
-        } else {
-            $stmt = $this->pdo->prepare(
-                'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-                 FROM notes
-                 WHERE user_id = :user_id
-                   AND deleted_at IS NULL
-                 ORDER BY updated_at DESC'
-            );
-            $stmt->execute(['user_id' => $userId]);
+            $where[] = '(n.title ILIKE :q OR n.content_md ILIKE :q)';
+            $params['q'] = '%' . $search . '%';
         }
+
+        if ($tagSlug !== null && $tagSlug !== '') {
+            $where[] = 'EXISTS (SELECT 1 FROM note_tags nt INNER JOIN tags t ON t.id = nt.tag_id WHERE nt.note_id = n.id AND t.slug = :tag_slug)';
+            $params['tag_slug'] = $tagSlug;
+        }
+
+        $sql = 'SELECT n.id, n.user_id, n.title, n.content_md, n.created_at, n.updated_at, n.deleted_at FROM notes n WHERE ' . implode(' AND ', $where) . ' ORDER BY n.updated_at DESC';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
 
         return array_map($this->rowToDto(...), $stmt->fetchAll());
     }
@@ -51,9 +50,9 @@ final class NoteRepository
     public function findById(string $id, string $userId): NoteDto|null
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-             FROM notes
-             WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+            'SELECT n.id, n.user_id, n.title, n.content_md, n.created_at, n.updated_at, n.deleted_at
+             FROM notes n
+             WHERE n.id = :id AND n.user_id = :user_id AND n.deleted_at IS NULL'
         );
         $stmt->execute(['id' => $id, 'user_id' => $userId]);
         $row = $stmt->fetch();
@@ -66,9 +65,9 @@ final class NoteRepository
     public function findByIdIncludingDeleted(string $id, string $userId): NoteDto|null
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-             FROM notes
-             WHERE id = :id AND user_id = :user_id'
+            'SELECT n.id, n.user_id, n.title, n.content_md, n.created_at, n.updated_at, n.deleted_at
+             FROM notes n
+             WHERE n.id = :id AND n.user_id = :user_id'
         );
         $stmt->execute(['id' => $id, 'user_id' => $userId]);
         $row = $stmt->fetch();
@@ -81,9 +80,9 @@ final class NoteRepository
     public function findByIdForUpdate(string $id, string $userId): NoteDto|null
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-             FROM notes
-             WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+            'SELECT n.id, n.user_id, n.title, n.content_md, n.created_at, n.updated_at, n.deleted_at
+             FROM notes n
+             WHERE n.id = :id AND n.user_id = :user_id AND deleted_at IS NULL
              FOR UPDATE'
         );
         $stmt->execute(['id' => $id, 'user_id' => $userId]);
@@ -97,9 +96,9 @@ final class NoteRepository
     public function findByIdForUpdateIncludingDeleted(string $id, string $userId): NoteDto|null
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-             FROM notes
-             WHERE id = :id AND user_id = :user_id
+            'SELECT n.id, n.user_id, n.title, n.content_md, n.created_at, n.updated_at, n.deleted_at
+             FROM notes n
+             WHERE n.id = :id AND n.user_id = :user_id
              FOR UPDATE'
         );
         $stmt->execute(['id' => $id, 'user_id' => $userId]);
@@ -185,13 +184,13 @@ final class NoteRepository
     ): array {
         if ($cursor !== null) {
             $stmt = $this->pdo->prepare(
-                'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-                 FROM notes
-                 WHERE user_id = :user_id
-                   AND deleted_at IS NULL
-                   AND (updated_at < :cursor_updated_at
-                        OR (updated_at = :cursor_updated_at AND id < :cursor_id))
-                 ORDER BY updated_at DESC, id DESC
+                'SELECT n.id, n.user_id, n.title, n.content_md, n.created_at, n.updated_at, n.deleted_at
+                 FROM notes n
+                 WHERE n.user_id = :user_id
+                   AND n.deleted_at IS NULL
+                   AND (n.updated_at < :cursor_updated_at
+                        OR (n.updated_at = :cursor_updated_at AND n.id < :cursor_id))
+                 ORDER BY n.updated_at DESC, n.id DESC
                  LIMIT :limit'
             );
             $stmt->bindValue(':user_id', $userId);
@@ -201,11 +200,11 @@ final class NoteRepository
             $stmt->execute();
         } else {
             $stmt = $this->pdo->prepare(
-                'SELECT id, user_id, title, content_md, created_at, updated_at, deleted_at
-                 FROM notes
-                 WHERE user_id = :user_id
-                   AND deleted_at IS NULL
-                 ORDER BY updated_at DESC, id DESC
+                'SELECT n.id, n.user_id, n.title, n.content_md, n.created_at, n.updated_at, n.deleted_at
+                 FROM notes n
+                 WHERE n.user_id = :user_id
+                   AND n.deleted_at IS NULL
+                 ORDER BY n.updated_at DESC, n.id DESC
                  LIMIT :limit'
             );
             $stmt->bindValue(':user_id', $userId);

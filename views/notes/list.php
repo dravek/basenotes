@@ -34,7 +34,7 @@ ob_start();
                 <?php if (!empty($noteTags[$note->id] ?? [])): ?>
                 <span class="note-tags">
                     <?php foreach ($noteTags[$note->id] as $tag): ?>
-                    <span class="tag-chip"><?= e($tag) ?></span>
+                    <a class="tag-chip" href="/app/notes?tag=<?= e($tag) ?>"><?= e($tag) ?></a>
                     <?php endforeach; ?>
                 </span>
                 <?php endif; ?>
