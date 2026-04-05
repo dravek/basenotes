@@ -1,5 +1,4 @@
 <?php
-<?php
 /**
  * Copyright (c) 2026 David Carrillo <dravek@gmail.com>
  *
