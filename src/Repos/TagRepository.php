@@ -36,19 +36,20 @@ final class TagRepository
         }
 
         $now = \App\Util\Clock::now();
+        $id = Id::ulid();
         $stmt = $this->pdo->prepare(
             'INSERT INTO tags (id, name, slug, created_at, updated_at)
              VALUES (:id, :name, :slug, :created_at, :updated_at)'
         );
         $stmt->execute([
-            'id' => Id::ulid(),
+            'id' => $id,
             'name' => $cleanName,
             'slug' => $slug,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
 
-        return new TagDto(Id::ulid(), $cleanName, $slug, $now, $now);
+        return new TagDto($id, $cleanName, $slug, $now, $now);
     }
 
     public function findBySlug(string $slug): TagDto|null
@@ -78,11 +79,12 @@ final class TagRepository
         return array_map($this->rowToDto(...), $stmt->fetchAll());
     }
 
-    public function syncForNote(string $noteId, string $userId, array $tagNames): void
+    /** @param list<string> $tagNames */
+    public function syncForNote(string $noteId, array $tagNames): void
     {
-        $clean = [];
+        $tags = [];
         foreach ($tagNames as $tagName) {
-            $tagName = trim((string)$tagName);
+            $tagName = trim($tagName);
             if ($tagName === '') {
                 continue;
             }
@@ -90,20 +92,20 @@ final class TagRepository
             if ($slug === '') {
                 continue;
             }
-            $clean[$slug] = $tagName;
+            $tags[$slug] = $tagName;
         }
 
         $stmt = $this->pdo->prepare('DELETE FROM note_tags WHERE note_id = :note_id');
         $stmt->execute(['note_id' => $noteId]);
 
-        if ($clean === []) {
+        if ($tags === []) {
             return;
         }
 
         $insert = $this->pdo->prepare(
             'INSERT INTO note_tags (note_id, tag_id, created_at) VALUES (:note_id, :tag_id, :created_at)'
         );
-        foreach ($clean as $slug => $tagName) {
+        foreach ($tags as $tagName) {
             $tag = $this->findOrCreate($tagName);
             $insert->execute([
                 'note_id' => $noteId,

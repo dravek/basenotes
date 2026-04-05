@@ -10,8 +10,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_slug
     ON tags (slug);
 
 CREATE TABLE IF NOT EXISTS note_tags (
-    note_id TEXT NOT NULL,
-    tag_id  TEXT NOT NULL,
+    note_id   TEXT    NOT NULL,
+    tag_id    TEXT    NOT NULL,
     created_at INTEGER NOT NULL,
     PRIMARY KEY (note_id, tag_id),
     FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE,

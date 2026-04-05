@@ -361,27 +361,34 @@ $router->post('/logout', function (Request $req) use ($auditRepo): void {
 
 // ── Notes routes ─────────────────────────────────────────────────────────
 
-$router->get('/app/notes', function (Request $req) use ($noteRepo): void {
+$router->get('/app/notes', function (Request $req) use ($noteRepo, $noteTagRepo): void {
     Middleware::requireAuth($req);
     $userId = \App\Auth\Session::userId();
     $search = $req->query('q');
     $notes  = $noteRepo->listByUser($userId, $search !== '' ? $search : null);
+    $noteTags = [];
+    foreach ($notes as $note) {
+        $noteTags[$note->id] = $noteTagRepo->listTagNamesForNote($note->id);
+    }
     require __DIR__ . '/../views/notes/list.php';
 });
 
 $router->get('/app/notes/new', function (Request $req): void {
     Middleware::requireAuth($req);
     $note = null;
+    $tags = [];
     require __DIR__ . '/../views/notes/edit.php';
 });
 
-$router->post('/app/notes', function (Request $req) use ($noteRepo): void {
+$router->post('/app/notes', function (Request $req) use ($noteRepo, $tagRepo, $pdo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
 
     $title   = mb_substr(trim($req->post('title')) ?: 'Untitled', 0, 500);
     $content = $req->post('content_md');
+    $tagsInput = $req->post('tags');
+    $tags = array_values(array_filter(array_map('trim', explode(',', $tagsInput))));
 
     $now      = \App\Util\Clock::now();
     $note = new \App\Repos\NoteDto(
@@ -394,11 +401,16 @@ $router->post('/app/notes', function (Request $req) use ($noteRepo): void {
         deletedAt: null,
     );
     $noteRepo->create($note);
+    if ($tags !== []) {
+        dbTransaction($pdo, function () use ($tagRepo, $note, $tags): void {
+            $tagRepo->syncForNote($note->id, $tags);
+        });
+    }
     header('Location: /app/notes/' . $note->id);
     exit;
 });
 
-$router->get('/app/notes/{id}', function (Request $req, array $args) use ($noteRepo): void {
+$router->get('/app/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteTagRepo): void {
     Middleware::requireAuth($req);
     $userId = \App\Auth\Session::userId();
     $note   = $noteRepo->findById($args['id'], $userId);
@@ -407,15 +419,18 @@ $router->get('/app/notes/{id}', function (Request $req, array $args) use ($noteR
         echo '<!DOCTYPE html><html><body><h1>Note not found.</h1></body></html>';
         exit;
     }
+    $tags = $noteTagRepo->listTagNamesForNote($note->id);
     require __DIR__ . '/../views/notes/edit.php';
 });
 
-$router->post('/app/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $pdo): void {
+$router->post('/app/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $tagRepo, $pdo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
     $title   = mb_substr(trim($req->post('title')) ?: 'Untitled', 0, 500);
     $content = $req->post('content_md');
+    $tagsInput = $req->post('tags');
+    $tags = array_values(array_filter(array_map('trim', explode(',', $tagsInput))));
 
     $noteId = $args['id'];
     dbTransactionWeb($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $noteId, $title, $content): void {
@@ -438,6 +453,11 @@ $router->post('/app/notes/{id}', function (Request $req, array $args) use ($note
         );
         $noteRepo->update($updated);
     });
+    if ($tags !== []) {
+        dbTransaction($pdo, function () use ($tagRepo, $noteId, $tags): void {
+            $tagRepo->syncForNote($noteId, $tags);
+        });
+    }
 
     header('Location: /app/notes/' . $noteId);
     exit;
