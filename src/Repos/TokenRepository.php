@@ -75,7 +75,7 @@ final class TokenRepository
              WHERE id = :id AND user_id = :user_id AND revoked_at IS NULL'
         );
         $stmt->execute([
-            'revoked_at' => time(),
+            'revoked_at' => \App\Util\Clock::now(),
             'id'         => $id,
             'user_id'    => $userId,
         ]);
@@ -86,7 +86,7 @@ final class TokenRepository
         $stmt = $this->pdo->prepare(
             'UPDATE api_tokens SET last_used_at = :last_used_at WHERE id = :id'
         );
-        $stmt->execute(['last_used_at' => time(), 'id' => $id]);
+        $stmt->execute(['last_used_at' => \App\Util\Clock::now(), 'id' => $id]);
     }
 
     private function rowToDto(array $row): TokenDto

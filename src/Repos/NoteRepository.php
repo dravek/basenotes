@@ -150,7 +150,7 @@ final class NoteRepository
              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
         );
         $stmt->execute([
-            'deleted_at' => time(),
+            'deleted_at' => \App\Util\Clock::now(),
             'id'         => $id,
             'user_id'    => $userId,
         ]);
