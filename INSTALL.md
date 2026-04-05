@@ -1,4 +1,4 @@
-# INSTALL.md — Markdown Notes App
+# INSTALL.md — Basenotes
 
 Setup instructions for local development and VPS production deployment.
 
@@ -21,8 +21,8 @@ No PHP, PostgreSQL, or Caddy installation required on your machine. Everything r
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/notes-app.git
-cd notes-app
+git clone https://github.com/your-username/basenotes.git
+cd basenotes
 ```
 
 ### 2. Create your environment file
@@ -94,7 +94,7 @@ This creates all required tables in the PostgreSQL database container.
 
 ### 5. Open the app
 
-Visit [http://localhost](http://localhost) in your browser.
+Visit [http://localhost:8080](http://localhost:8080) in your browser.
 
 Register a new account and start taking notes.
 
@@ -193,7 +193,7 @@ It should return your VPS IP before you proceed.
 
 ```bash
 # On the VPS
-git clone https://github.com/your-username/notes-app.git /var/www/notes
+git clone https://github.com/your-username/basenotes.git /var/www/notes
 cd /var/www/notes
 
 cp .env.example .env
@@ -236,7 +236,7 @@ Replace `notes.yourdomain.com` with your actual domain and `your@email.com` with
 
 ### Start the containers on the VPS
 
-Before you start, update the published ports for production:
+For production, update the published ports in `docker-compose.yml`:
 
 ```yaml
 # docker-compose.yml (caddy service)
