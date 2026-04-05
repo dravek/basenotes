@@ -21,7 +21,7 @@ ob_start();
             >
             <div class="note-form-actions">
                 <button type="submit" class="btn btn-primary">Save</button>
-                <a href="/app/notes" class="btn btn-secondary">Cancel</a>
+                <a href="/app/notes" class="btn btn-secondary">Close</a>
                 <?php if (!$isNew): ?>
                 <a href="/app/notes/<?= e($note->id) ?>/history" class="btn btn-secondary">History</a>
                 <a href="/app/notes/<?= e($note->id) ?>/export" class="btn btn-secondary">Export</a>
