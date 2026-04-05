@@ -18,6 +18,7 @@ use App\Http\Audit;
 use App\Http\Middleware;
 use App\Http\Request;
 use App\Http\Router;
+use App\Repos\AuditLogRepository;
 use App\Repos\NoteRepository;
 use App\Repos\NoteVersionRepository;
 use App\Repos\RecoveryAuditRepository;
