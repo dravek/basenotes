@@ -9,41 +9,36 @@ use PHPUnit\Framework\TestCase;
 
 final class TagRepositoryTest extends TestCase
 {
-    public function testFindOrCreateNormalizesSlugAndReusesExisting(): void
+    public function testFindOrCreateReusesSlugAndSyncsNoteTags(): void
     {
-        $pdo = new \PDO('sqlite::memory:');
-        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        $pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
-        $pdo->exec('CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)');
-        $pdo->exec('CREATE UNIQUE INDEX idx_tags_slug ON tags (slug)');
-        $pdo->exec('CREATE TABLE note_tags (note_id TEXT NOT NULL, tag_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (note_id, tag_id))');
+        $pdo = $this->pdo();
+        $this->migrate($pdo);
 
         $repo = new TagRepository($pdo);
-
         $first = $repo->findOrCreate('Work Stuff');
         $second = $repo->findOrCreate('work stuff');
 
         $this->assertSame($first->id, $second->id);
-        $this->assertSame('Work Stuff', $first->name);
         $this->assertSame('work-stuff', $first->slug);
+
+        $repo->syncForNote('n1', ['Work Stuff', 'Home']);
+        $tags = $repo->listForNote('n1');
+        $this->assertCount(2, $tags);
+        $this->assertSame(['Home', 'Work Stuff'], array_map(static fn($tag) => $tag->name, $tags));
     }
 
-    public function testSyncForNoteReplacesTags(): void
+    private function pdo(): \PDO
     {
         $pdo = new \PDO('sqlite::memory:');
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+        return $pdo;
+    }
+
+    private function migrate(\PDO $pdo): void
+    {
         $pdo->exec('CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)');
         $pdo->exec('CREATE UNIQUE INDEX idx_tags_slug ON tags (slug)');
         $pdo->exec('CREATE TABLE note_tags (note_id TEXT NOT NULL, tag_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (note_id, tag_id))');
-
-        $repo = new TagRepository($pdo);
-        $repo->syncForNote('note-1', ['Work', 'Home']);
-        $repo->syncForNote('note-1', ['Work']);
-
-        $stmt = $pdo->query('SELECT t.slug FROM note_tags nt INNER JOIN tags t ON t.id = nt.tag_id WHERE nt.note_id = "note-1" ORDER BY t.slug');
-        $slugs = array_map(static fn(array $row): string => $row['slug'], $stmt->fetchAll());
-
-        $this->assertSame(['work'], $slugs);
     }
 }

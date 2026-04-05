@@ -19,8 +19,19 @@ jobs:
           tools: composer:v2
           coverage: none
 
+      - name: Prepare test database
+        run: |
+          docker compose up -d postgres
+          until docker compose exec -T postgres pg_isready -U basenotes -d basenotes; do sleep 1; done
+
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Run tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: basenotes
+          DB_USER: basenotes
+          DB_PASS: basenotes
         run: vendor/bin/phpunit
