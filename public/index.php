@@ -17,6 +17,8 @@ use App\Auth\Session;
 use App\Http\Middleware;
 use App\Http\Request;
 use App\Http\Router;
+use App\Http\Audit;
+use App\Repos\AuditLogRepository;
 use App\Repos\NoteRepository;
 use App\Repos\NoteVersionRepository;
 use App\Repos\RecoveryAuditRepository;
@@ -134,6 +136,7 @@ $noteVersionRepo = new NoteVersionRepository($pdo);
 $tokenRepo = new TokenRepository($pdo);
 $recoveryRepo = new RecoveryCodeRepository($pdo);
 $recoveryAuditRepo = new RecoveryAuditRepository($pdo);
+$auditRepo = new AuditLogRepository($pdo);
 $pepper    = Env::get('APP_PEPPER');
 
 $sessionUserId = Session::userId();
@@ -163,7 +166,7 @@ $router->get('/login', function (Request $req) use ($userRepo): void {
     require __DIR__ . '/../views/login.php';
 });
 
-$router->post('/login', function (Request $req) use ($userRepo): void {
+$router->post('/login', function (Request $req) use ($userRepo, $auditRepo): void {
     Middleware::verifyCsrf($req);
 
     $email = trim($req->post('email'));
@@ -184,6 +187,7 @@ $router->post('/login', function (Request $req) use ($userRepo): void {
     if ($user === null || !\App\Auth\Password::verify($password, $user->passwordHash)) {
         Middleware::recordFailedLogin($identity);
         $errors = ['Invalid email or password.'];
+        Audit::recordAnonymous($auditRepo, 'login_failed', $user?->id, 'auth', null, ['email' => strtolower($email)]);
         require __DIR__ . '/../views/login.php';
         return;
     }
@@ -197,6 +201,7 @@ $router->post('/login', function (Request $req) use ($userRepo): void {
     Middleware::resetLoginAttempts($identity);
     session_regenerate_id(true);
     \App\Auth\Session::set('user_id', $user->id);
+    Audit::recordAnonymous($auditRepo, 'login_success', $user->id, 'auth', null, ['email' => $user->email]);
     header('Location: /app/notes');
     exit;
 });
@@ -253,6 +258,8 @@ $router->post('/register', function (Request $req) use ($userRepo, $recoveryRepo
         $recoveryRepo->createMany($user->id, $hashes);
     });
 
+    Audit::recordAnonymous($auditRepo, 'register', $user->id, 'user', $user->id, ['email' => $user->email]);
+
     $displayCodes = array_map(\App\Auth\RecoveryCode::format(...), $rawCodes);
     \App\Auth\Session::set('new_recovery_codes', $displayCodes);
 
@@ -308,6 +315,7 @@ $router->post('/recovery', function (Request $req) use ($userRepo, $recoveryRepo
     $code = $recoveryRepo->findValidByHash($hash);
     if ($code === null) {
         Middleware::recordFailedRecovery($identity);
+        Audit::recordAnonymous($auditRepo, 'recovery_attempt_failed', null, 'recovery_code', null, ['reason' => 'invalid_or_used']);
         $errors = ['Recovery code is invalid or already used.'];
         require __DIR__ . '/../views/recovery.php';
         return;
@@ -316,6 +324,7 @@ $router->post('/recovery', function (Request $req) use ($userRepo, $recoveryRepo
     $codeUser = $userRepo->findById($code->userId);
     if ($codeUser === null || $codeUser->disabledAt !== null) {
         Middleware::recordFailedRecovery($identity);
+        Audit::recordAnonymous($auditRepo, 'recovery_attempt_failed', $codeUser?->id, 'recovery_code', null, ['reason' => 'disabled_user']);
         $errors = ['Recovery code is invalid or already used.'];
         require __DIR__ . '/../views/recovery.php';
         return;
@@ -324,6 +333,7 @@ $router->post('/recovery', function (Request $req) use ($userRepo, $recoveryRepo
     $userRepo->updatePassword($code->userId, \App\Auth\Password::hash($new));
     $recoveryRepo->markUsed($code->id);
     Middleware::resetRecoveryAttempts($identity);
+    Audit::recordAnonymous($auditRepo, 'recovery_code_used', $code->userId, 'recovery_code', $code->id);
     $recoveryAuditRepo->record(
         $code->userId,
         'recovery_code_used',
@@ -337,8 +347,9 @@ $router->post('/recovery', function (Request $req) use ($userRepo, $recoveryRepo
     exit;
 });
 
-$router->post('/logout', function (Request $req): void {
+$router->post('/logout', function (Request $req) use ($auditRepo): void {
     Middleware::verifyCsrf($req);
+    Audit::record($auditRepo, 'logout');
     \App\Auth\Session::destroy();
     header('Location: /login');
     exit;
@@ -540,7 +551,7 @@ $router->get('/app/admin/users', function (Request $req) use ($userRepo): void {
     require __DIR__ . '/../views/admin/users.php';
 });
 
-$router->post('/app/admin/users/{id}/disable', function (Request $req, array $args) use ($userRepo): void {
+$router->post('/app/admin/users/{id}/disable', function (Request $req, array $args) use ($userRepo, $auditRepo): void {
     Middleware::requireAdmin($req, $userRepo);
     Middleware::verifyCsrf($req);
     $targetId = $args['id'];
@@ -556,11 +567,12 @@ $router->post('/app/admin/users/{id}/disable', function (Request $req, array $ar
         exit;
     }
     $userRepo->setDisabledAt($targetId, \App\Util\Clock::now());
+    Audit::record($auditRepo, 'user_disabled', $targetId, 'user', $targetId);
     header('Location: /app/admin/users');
     exit;
 });
 
-$router->post('/app/admin/users/{id}/enable', function (Request $req, array $args) use ($userRepo): void {
+$router->post('/app/admin/users/{id}/enable', function (Request $req, array $args) use ($userRepo, $auditRepo): void {
     Middleware::requireAdmin($req, $userRepo);
     Middleware::verifyCsrf($req);
     $targetId = $args['id'];
@@ -571,6 +583,7 @@ $router->post('/app/admin/users/{id}/enable', function (Request $req, array $arg
         exit;
     }
     $userRepo->setDisabledAt($targetId, null);
+    Audit::record($auditRepo, 'user_enabled', $targetId, 'user', $targetId);
     header('Location: /app/admin/users');
     exit;
 });
@@ -582,7 +595,7 @@ $router->get('/app/settings/password', function (Request $req): void {
     require __DIR__ . '/../views/settings/password.php';
 });
 
-$router->post('/app/settings/password', function (Request $req) use ($userRepo): void {
+$router->post('/app/settings/password', function (Request $req) use ($userRepo, $auditRepo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId  = \App\Auth\Session::userId();
@@ -613,6 +626,7 @@ $router->post('/app/settings/password', function (Request $req) use ($userRepo):
     }
 
     $userRepo->updatePassword($userId, \App\Auth\Password::hash($new));
+    Audit::record($auditRepo, 'password_changed', $userId, 'user', $userId);
     session_regenerate_id(true);
     $success = 'Password updated successfully.';
     require __DIR__ . '/../views/settings/password.php';
@@ -625,7 +639,7 @@ $router->get('/app/settings/recovery', function (Request $req): void {
     require __DIR__ . '/../views/settings/recovery.php';
 });
 
-$router->post('/app/settings/recovery', function (Request $req) use ($recoveryRepo, $recoveryAuditRepo, $pepper, $pdo): void {
+$router->post('/app/settings/recovery', function (Request $req) use ($recoveryRepo, $recoveryAuditRepo, $auditRepo, $pepper, $pdo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
@@ -640,6 +654,8 @@ $router->post('/app/settings/recovery', function (Request $req) use ($recoveryRe
         $recoveryRepo->invalidateAll($userId);
         $recoveryRepo->createMany($userId, $hashes);
     });
+
+    Audit::record($auditRepo, 'recovery_codes_regenerated', $userId, 'recovery_code', $userId, ['count' => count($rawCodes)]);
 
     $displayCodes = array_map(\App\Auth\RecoveryCode::format(...), $rawCodes);
     \App\Auth\Session::set('new_recovery_codes', $displayCodes);
@@ -662,7 +678,7 @@ $router->get('/app/settings/tokens', function (Request $req) use ($tokenRepo): v
     require __DIR__ . '/../views/settings/tokens.php';
 });
 
-$router->post('/app/settings/tokens', function (Request $req) use ($tokenRepo, $pepper): void {
+$router->post('/app/settings/tokens', function (Request $req) use ($tokenRepo, $auditRepo, $pepper): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
@@ -697,6 +713,7 @@ $router->post('/app/settings/tokens', function (Request $req) use ($tokenRepo, $
         revokedAt:  null,
     );
     $tokenRepo->create($dto);
+    Audit::record($auditRepo, 'api_token_created', $userId, 'api_token', $dto->id, ['name' => $name, 'scopes' => $scope]);
 
     // Store raw token in session for one-time display
     \App\Auth\Session::set('new_raw_token', $raw);
@@ -704,20 +721,22 @@ $router->post('/app/settings/tokens', function (Request $req) use ($tokenRepo, $
     exit;
 });
 
-$router->post('/app/settings/tokens/{id}/revoke', function (Request $req, array $args) use ($tokenRepo): void {
+$router->post('/app/settings/tokens/{id}/revoke', function (Request $req, array $args) use ($tokenRepo, $auditRepo): void {
     Middleware::requireAuth($req);
     Middleware::verifyCsrf($req);
     $userId = \App\Auth\Session::userId();
     $tokenRepo->revoke($args['id'], $userId);
+    Audit::record($auditRepo, 'api_token_revoked', $userId, 'api_token', $args['id']);
     header('Location: /app/settings/tokens');
     exit;
 });
 
 // ── API routes ────────────────────────────────────────────────────────────
 
-$router->get('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+$router->get('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $userRepo, $auditRepo, $pepper): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:read', $pepper);
     $userId = $token->userId;
+    Audit::record($auditRepo, 'api_token_used', $token->userId, 'api_token', $token->id, ['scope' => 'notes:read']);
 
     $cursor  = $req->query('cursor');
     $perPage = min((int)($req->query('per_page') ?: 20), 100);
@@ -751,9 +770,10 @@ $router->get('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo
     ]);
 });
 
-$router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+$router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRepo, $userRepo, $auditRepo, $pepper): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
+    Audit::record($auditRepo, 'api_token_used', $token->userId, 'api_token', $token->id, ['scope' => 'notes:write']);
 
     $body = $req->rawBody();
     if (!json_validate($body)) {
@@ -792,9 +812,10 @@ $router->post('/api/v1/notes', function (Request $req) use ($noteRepo, $tokenRep
     ]);
 });
 
-$router->get('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $pepper): void {
+$router->get('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $tokenRepo, $userRepo, $auditRepo, $pepper): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:read', $pepper);
     $userId = $token->userId;
+    Audit::record($auditRepo, 'api_token_used', $token->userId, 'api_token', $token->id, ['scope' => 'notes:read']);
 
     $note = $noteRepo->findById($args['id'], $userId);
     if ($note === null) {
@@ -811,9 +832,10 @@ $router->get('/api/v1/notes/{id}', function (Request $req, array $args) use ($no
     ]);
 });
 
-$router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $tokenRepo, $userRepo, $pepper, $pdo): void {
+$router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $tokenRepo, $userRepo, $auditRepo, $pepper, $pdo): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
+    Audit::record($auditRepo, 'api_token_used', $token->userId, 'api_token', $token->id, ['scope' => 'notes:write']);
 
     $body = $req->rawBody();
     if (!json_validate($body)) {
@@ -857,9 +879,10 @@ $router->patch('/api/v1/notes/{id}', function (Request $req, array $args) use ($
     ]);
 });
 
-$router->delete('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $tokenRepo, $userRepo, $pepper, $pdo): void {
+$router->delete('/api/v1/notes/{id}', function (Request $req, array $args) use ($noteRepo, $noteVersionRepo, $tokenRepo, $userRepo, $auditRepo, $pepper, $pdo): void {
     $token  = Middleware::requireApiToken($req, $tokenRepo, $userRepo, 'notes:write', $pepper);
     $userId = $token->userId;
+    Audit::record($auditRepo, 'api_token_used', $token->userId, 'api_token', $token->id, ['scope' => 'notes:write']);
 
     dbTransactionApi($pdo, function () use ($noteRepo, $noteVersionRepo, $userId, $args): void {
         $existing = $noteRepo->findByIdForUpdate($args['id'], $userId);
