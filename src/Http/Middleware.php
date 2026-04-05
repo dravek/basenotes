@@ -228,5 +228,6 @@ final class Middleware
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
         header('Referrer-Policy: strict-origin-when-cross-origin');
+        header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://unpkg.com; script-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' data:; form-action 'self'; base-uri 'self'; frame-ancestors 'none'");
     }
 }
