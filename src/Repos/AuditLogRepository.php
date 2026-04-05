@@ -42,4 +42,22 @@ final class AuditLogRepository
             'created_at'     => \App\Util\Clock::now(),
         ]);
     }
+
+    /** @return list<array<string, mixed>> */
+    public function listRecent(int $limit = 100): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT a.id, a.event, a.ip, a.user_agent, a.entity_type, a.entity_id, a.metadata_json, a.created_at,
+                    au.email AS actor_email,
+                    tu.email AS target_email
+             FROM audit_log a
+             LEFT JOIN users au ON au.id = a.actor_user_id
+             LEFT JOIN users tu ON tu.id = a.target_user_id
+             ORDER BY a.created_at DESC, a.id DESC
+             LIMIT :limit'
+        );
+        $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
 }
