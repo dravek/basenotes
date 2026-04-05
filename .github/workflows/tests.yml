@@ -8,6 +8,21 @@ jobs:
   phpunit:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: basenotes
+          POSTGRES_USER: basenotes
+          POSTGRES_PASSWORD: basenotes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U basenotes -d basenotes"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,4 +38,10 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Run tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: basenotes
+          DB_USER: basenotes
+          DB_PASS: basenotes
         run: vendor/bin/phpunit
