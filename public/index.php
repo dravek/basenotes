@@ -365,8 +365,7 @@ $router->get('/app/notes', function (Request $req) use ($noteRepo, $noteTagRepo)
     Middleware::requireAuth($req);
     $userId = \App\Auth\Session::userId();
     $search = $req->query('q');
-    $tagSlug = $req->query('tag');
-    $notes  = $noteRepo->listByUser($userId, $search !== '' ? $search : null, $tagSlug !== '' ? $tagSlug : null);
+    $notes  = $noteRepo->listByUser($userId, $search !== '' ? $search : null);
     $noteTags = [];
     foreach ($notes as $note) {
         $noteTags[$note->id] = $noteTagRepo->listTagNamesForNote($note->id);
